@@ -36,10 +36,7 @@ public final class VoiceContributionApi {
                 || wav[8] != 'W' || wav[9] != 'A' || wav[10] != 'V' || wav[11] != 'E') return false;
         if (contribution.durationMillis() <= 0 || contribution.durationMillis() > MAX_DURATION_MILLIS) return false;
         String transcript = contribution.transcript();
-        if (!TextPolicy.hasText(transcript)) return false;
-        if (!TextPolicy.withinCodePoints(transcript, MAX_TRANSCRIPT)
-                || TextPolicy.hasControlExceptWhitespace(transcript)
-                || !TextPolicy.validUnicode(transcript)) return false;
+        if (!TextPolicy.validBoundedText(transcript, MAX_TRANSCRIPT)) return false;
         return nonEmpty(contribution.language()) && nonEmpty(contribution.provider())
             && nonEmpty(contribution.appVersion());
     }

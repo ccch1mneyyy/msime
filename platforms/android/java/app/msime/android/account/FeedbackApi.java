@@ -55,9 +55,7 @@ public final class FeedbackApi {
 
     /** 描述去掉首尾空白后非空、不超过 500 个字符、不含换行和制表以外的控制字符时可以提交。 */
     public static boolean validText(String text) {
-        if (!TextPolicy.hasText(text)) return false;
-        if (TextPolicy.codePointLength(text) > MAX_TEXT) return false;
-        return !TextPolicy.hasControlExceptWhitespace(text) && TextPolicy.validUnicode(text);
+        return TextPolicy.validBoundedText(text, MAX_TEXT);
     }
 
     /** 只保留白名单键；值去掉控制字符、截到 256 字节以内（不截断在一个字符中间），空值丢掉。 */

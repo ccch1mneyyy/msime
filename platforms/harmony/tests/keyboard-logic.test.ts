@@ -3865,6 +3865,53 @@ group("resolves external candidate skin tokens without trusting missing fields",
   );
 });
 
+group("a theme with a fixed mode is offered and drawn only in that mode", () => {
+  const theme = (id: string, appearance: string | null) => ({
+    id,
+    title: id,
+    appearance,
+    preview: null,
+    candidate: null,
+    keyboard: null,
+  });
+  const catalog = [
+    theme("system", null),
+    theme("shuishan", "dark"),
+    theme("light", "light"),
+    theme("night", "dark"),
+    theme("custom", null),
+  ];
+  const offered = (dark: boolean) =>
+    catalog
+      .filter((entry) => GlobalTheme.fitsMode(entry.appearance, dark))
+      .map((entry) => entry.id);
+  check(
+    offered(false).join() === "system,light,custom",
+    `light mode offers no dark themes: ${offered(false).join()}`,
+  );
+  check(
+    offered(true).join() === "system,shuishan,night,custom",
+    `dark mode offers no light themes: ${offered(true).join()}`,
+  );
+  check(
+    GlobalTheme.effectiveId(catalog, "night", false) === "system",
+    "夜青 draws as system in light mode",
+  );
+  check(
+    GlobalTheme.effectiveId(catalog, "night", true) === "night",
+    "夜青 draws itself in dark mode",
+  );
+  check(
+    GlobalTheme.effectiveId(catalog, "light", true) === "system",
+    "浅色 draws as system in dark mode",
+  );
+  check(GlobalTheme.effectiveId(catalog, "custom", false) === "custom", "custom has no fixed mode");
+  check(
+    GlobalTheme.effectiveId(catalog, "unknown", true) === "unknown",
+    "an id outside the catalog is left alone",
+  );
+});
+
 group("maps safe external toolbar CSS to ArkUI values", () => {
   const base = GlobalTheme.candidateColors(null, true);
   const toolbar = ToolbarSkinPolicy.fromCss(

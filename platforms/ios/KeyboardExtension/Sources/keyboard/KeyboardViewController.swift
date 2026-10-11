@@ -5741,6 +5741,15 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       return
     }
     guard snapshot.generation == current.generation else {
+      // AI 回答到达或没有结果时也会换一代，但只有 AI 座位那一行变了：面板留着、原地换上新的一代（「…」换成「—」或回答），不跳回开头。原来这里一换代就收起普通的候选网格，用户刚展开完整列表，AI 的结果一到它就没了（#6888）。
+      if hasComposition, snapshot.onlyTheAISeatChanged(since: current) {
+        candidatePanelSnapshot = snapshot
+        panel.reload(candidates: snapshot.entries.map(\.text), annotations: candidatePanelAnnotations(snapshot),
+                     markers: candidatePanelMarkers(snapshot), aiPlaceholders: candidatePanelAIPlaceholders(snapshot),
+                     keepingScrollPosition: true)
+        updateNineKeyPanelColumns()
+        return
+      }
       // 九键面板里选拼音、退格和筛选都会换一代候选，面板留着、按新的一代重建，组字结束才收起。其他面板照旧在候选换代时收起。
       guard nineKeyPanelColumns != nil, hasComposition else {
         closeKeyboardPicker()

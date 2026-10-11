@@ -37,8 +37,9 @@ public final class CandidateGlossPolicy {
 
     /** Read a JSON string without org.json's implicit scalar-to-string coercion. */
     public static String strictString(Object value) {
-        if (!(value instanceof String)) throw new IllegalArgumentException("Expected JSON string");
-        return (String) value;
+        String parsed = JsonPolicy.strictString(value);
+        if (parsed == null) throw new IllegalArgumentException("Expected JSON string");
+        return parsed;
     }
 
     /** Whether an apply-translations response carries a typed JSON success flag. */

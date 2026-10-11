@@ -228,6 +228,12 @@ public final class MSIMEInputService extends InputMethodService {
     // 会话的 `preferences_directory`（state_root）：随包没有的非英文离线释义从它下面下载的 offline-glosses 资源包里读。
     private String candidateGlossStateRoot = "";
     private String onlineSignature = "";
+    /**
+     * 问过 AI 却没有结果、占位行已换成「—」的那次请求的签名：同一组字不再向 AI 发请求，只在本地把占位行再换成「—」（#6888）。
+     *
+     * <p>失败后释放 {@link #onlineSignature} 是为了让云候选下次渲染时重试；没有这一条，AI 会跟着在每次渲染时重问；释义到达、设置轮询都会重画，模拟器上一个回答为空的组字因此每秒发一次 AI 请求。组字一变就清掉，回到这个组字时重新问。
+     */
+    private volatile String aiResolvedSignature = "";
     /** Read from the online worker as an early-out, so it must not tear across threads. */
     private volatile long onlineEpoch;
     private Runnable onlineTask;
@@ -1647,6 +1653,10 @@ public final class MSIMEInputService extends InputMethodService {
     }
 
     private void stop(boolean finish) {
+        // Rebuilding the Engine (including an in-place privacy-mode restart) invalidates any
+        // clipboard image copy still running on the worker. Its completion must not submit an
+        // image after the user has enabled the privacy gate.
+        clipboardImageGeneration++;
         candidateTranslationBindingEpoch++;
         candidateTranslationVerifiedGeneration = -1L;
         candidateTranslationAppliedGeneration = -1L;
@@ -2916,6 +2926,7 @@ public final class MSIMEInputService extends InputMethodService {
     /** Invalidate delayed and in-flight optional provider work at an editor boundary. */
     private void invalidateOnlineProviders() {
         onlineSignature = "";
+        aiResolvedSignature = "";
         if (onlineTask != null) {
             main.removeCallbacks(onlineTask);
             onlineTask = null;
@@ -3026,6 +3037,7 @@ public final class MSIMEInputService extends InputMethodService {
             InputViewValuePolicy.booleanValue(assistant, "enabled", false) ? assistant.toString() : "");
         if (signature.equals(onlineSignature)) return;
         onlineSignature = signature;
+        if (!signature.equals(aiResolvedSignature)) aiResolvedSignature = "";
         if (onlineTask != null) main.removeCallbacks(onlineTask);
         onlineEpoch = onlineEpoch == Long.MAX_VALUE ? 0 : onlineEpoch + 1;
         final long epoch = onlineEpoch;
@@ -3078,6 +3090,8 @@ public final class MSIMEInputService extends InputMethodService {
             }
             final String queryDocument = aiDocument;
             aiResolveDocument = aiDocument;
+            // 这个组字问过 AI 而没有结果：不再发请求，finally 只把占位行换成「—」。
+            if (requestSignature.equals(aiResolvedSignature)) return;
             JSONObject descriptor = aiRequestDescriptor(onSessionThread(targetSession, epoch,
                 () -> NativeClient.aiRequestForQuery(targetSession, queryDocument)));
             if (descriptor == null) return;
@@ -3098,6 +3112,9 @@ public final class MSIMEInputService extends InputMethodService {
                 final String resolveDocument = aiResolveDocument;
                 applyOnlineResult(targetSession, epoch,
                     () -> NativeClient.resolveOnlineCandidates(targetSession, resolveDocument, 1));
+                // AI 这一边到此为止：只有云候选失败时才释放签名重试，重试也不再问 AI（见 aiResolvedSignature）。
+                aiResolvedSignature = requestSignature;
+                aiComplete = true;
             }
             if (!cloudComplete || !aiComplete)
                 releaseOnlineSignatureIfCurrent(requestSignature, epoch, targetSession);
@@ -6567,15 +6584,19 @@ public final class MSIMEInputService extends InputMethodService {
         configureCandidateTextLayout(button, labelLines);
         KeyboardTypographyPolicy.setKeyTextSize(button, candidateFontSize);
         ViewPolicy.setSelected(button, highlighted);
-        // AI 座位上的占位行（Engine 候选来源 12，「…」或「—」）画淡一些，和真候选区分开；按钮会复用，其他候选恢复不透明（#6888）。
-        button.setAlpha(InputViewValuePolicy.integer(candidate, "source", -1) == 12 ? 0.45f : 1f);
+        // AI 座位上的占位行（Engine 候选来源 12，「…」或「—」）画淡一些，和真候选区分开；按钮会复用，其他候选恢复不透明。读屏念它的状态，不提示长按管理（#6888）。
+        int source = InputViewValuePolicy.integer(candidate, "source", -1);
+        button.setAlpha(AiPendingCandidatePolicy.alpha(source));
         // render() attaches the button and applies the complete skin tree once below.
         // Avoid creating its candidate drawables before that pass.
-        String description = "候选 " + (slot + 1) + "：" + text
-            + candidateAccessibilitySuffix(candidate, typed);
+        String description = AiPendingCandidatePolicy.description(source, "候选 " + (slot + 1) + "：", text,
+            candidateAccessibilitySuffix(candidate, typed));
         JSONObject id = candidate.optJSONObject("id");
         button.setContentDescription(id != null && candidateManagementEnabled()
+                && AiPendingCandidatePolicy.offersMenu(source)
             ? description + "；长按管理" : description);
+        // 按钮会复用：占位行不可长按，读屏也就不提示长按；换回真候选时恢复。
+        button.setLongClickable(AiPendingCandidatePolicy.offersMenu(source));
         if (Build.VERSION.SDK_INT >= 30)
             button.setStateDescription(highlighted ? "已选中" : "未选中");
         ViewPolicy.setEnabled(button, id != null);
@@ -8019,6 +8040,7 @@ public final class MSIMEInputService extends InputMethodService {
      */
     private void restartSessionForPrivacy() {
         if (session == 0 || runtimeOptionsBase.isEmpty()) return;
+        long startGeneration = ++engineStartGeneration;
         if (connection != null && view != null && !InputViewValuePolicy.editingText(view).isEmpty())
             command(FINISH_COMPOSITION_COMMAND);
         boolean panelOpen = ViewPolicy.isVisible(moreToolsScroll);
@@ -8030,11 +8052,13 @@ public final class MSIMEInputService extends InputMethodService {
             if (learningSuppressed()) options.getJSONObject("preferences").put("learning", false);
             runtimeOptionsForSnapshot = options.toString();
             message = "共享运行时准备中";
-            scheduleEngineStartup(runtimeOptionsForSnapshot, ++engineStartGeneration);
+            scheduleEngineStartup(runtimeOptionsForSnapshot, startGeneration);
         } catch (JSONException error) {
             message = "共享运行时未就绪：仅直接输入";
         }
     }
+
+    long inputLifecycleGeneration() { return engineStartGeneration; }
 
     /** 功能面板的手写：切到手写方案；已经是手写时切回上一个中文方案。 */
     void toggleHandwritingScheme() {

@@ -93,7 +93,8 @@ for entry in \
     "EmailSuffixDeviceSmoke|Email suffix acceptance failed" \
     "NumberRowDeviceSmoke|Number row acceptance failed" \
     "ClipboardImageDeviceSmoke|Clipboard image acceptance failed" \
-    "CaretCandidatesDeviceSmoke|Caret candidates acceptance failed"
+    "CaretCandidatesDeviceSmoke|Caret candidates acceptance failed" \
+    "AiPlaceholderDeviceSmoke|AI placeholder acceptance failed"
 do
   suite=${entry%%|*}
   if [[ " ${MSIME_DEVICE_SMOKE_SKIP:-} " == *" $suite "* ]]; then

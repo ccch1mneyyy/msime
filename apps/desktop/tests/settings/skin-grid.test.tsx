@@ -46,7 +46,12 @@ const sample: ExternalSkin = {
 
 // 网格只画在鸿蒙手机上，所以按鸿蒙提供的主题排。
 const themeCatalog = offeredThemeCatalog("harmony");
-const builtinTitles = themeCatalog.filter((entry) => entry.id !== "custom").map((e) => e.title);
+// 固定明暗的主题只在那种明暗下列出；测试默认在浅色下渲染。
+const fitsMode = (appearance: string | null, dark: boolean) =>
+  appearance === null || (appearance === "dark") === dark;
+const builtinTitles = themeCatalog
+  .filter((entry) => entry.id !== "custom" && fitsMode(entry.appearance, false))
+  .map((e) => e.title);
 
 function grid(props: Partial<ComponentProps<typeof SkinGrid>> = {}) {
   const onApply = vi.fn();
@@ -102,25 +107,30 @@ test("reports the applied skin's id for the badge", () => {
   cleanup();
 
   const inUse = vi.fn();
-  grid({ globalTheme: "night", onApplied: inUse });
+  grid({ globalTheme: "night", keyboardTheme: "dark", onApplied: inUse });
   fireEvent.click(screen.getByRole("button", { name: "夜青" }));
   expect(inUse).not.toHaveBeenCalled();
 });
 
 test("keeps the catalog's 自定义 card on a host without the keyboard skin editor", () => {
   grid({ customDesign: undefined });
-  expect(cardNames()).toEqual(themeCatalog.map((entry) => entry.title).concat("Sample skin"));
+  expect(cardNames()).toEqual(
+    themeCatalog
+      .filter((entry) => fitsMode(entry.appearance, false))
+      .map((entry) => entry.title)
+      .concat("Sample skin"),
+  );
 });
 
 test("rings and checks only the theme in use", () => {
-  grid({ globalTheme: "night" });
+  grid({ globalTheme: "night", keyboardTheme: "dark" });
   const selected = screen.getByRole("button", { name: "夜青" });
   expect(selected.getAttribute("aria-pressed")).toBe("true");
   expect(selected.querySelector("[data-skin-check]")).not.toBeNull();
   expect(selected.querySelector("[data-skin-frame]")!.className).toContain(
     "0_0_0_4px_var(--accent-color)",
   );
-  const other = screen.getByRole("button", { name: "纸白" });
+  const other = screen.getByRole("button", { name: "墨" });
   expect(other.getAttribute("aria-pressed")).toBe("false");
   expect(other.querySelector("[data-skin-check]")).toBeNull();
   expect(other.querySelector("[data-skin-frame]")!.className).toContain("0_0_0_1px_var(--p-hair)");
@@ -141,19 +151,33 @@ test("a package in use wins over the custom design it is drawn with", () => {
   );
 });
 
-// 浅色、深色两个槽位里的皮肤包都算在用：两张卡片都打勾，再点一次只把它从自己的槽位取下。
+// 浅色、深色两个槽位里的皮肤包都算在用，但每种明暗只列出自己那一款：浅色下是浅色槽位的，深色下是深色槽位的；再点一次只把它从自己的槽位取下。
 test("skins in the light and the dark slot are both in use, and tapping one again takes it out", () => {
   const night: ExternalSkin = { ...sample, id: "midnight", name: "Midnight skin", base: "night" };
+  const customTheme = {
+    base: "night",
+    candidate_skin: "sample",
+    candidate_skin_dark: "midnight",
+  } as const;
+  grid({ globalTheme: "custom", customTheme, packages: [sample, night] });
+  expect(screen.getByRole("button", { name: "Sample skin" }).getAttribute("aria-pressed")).toBe(
+    "true",
+  );
+  expect(screen.queryByRole("button", { name: "Midnight skin" })).toBeNull();
+  cleanup();
+
   const onApplied = vi.fn();
   const { onApply } = grid({
     globalTheme: "custom",
-    customTheme: { base: "night", candidate_skin: "sample", candidate_skin_dark: "midnight" },
+    customTheme,
     packages: [sample, night],
+    keyboardTheme: "dark",
     onApplied,
   });
-  for (const name of ["Sample skin", "Midnight skin"])
-    expect(screen.getByRole("button", { name }).getAttribute("aria-pressed")).toBe("true");
-  expect(document.querySelectorAll("[data-skin-check]")).toHaveLength(2);
+  expect(screen.queryByRole("button", { name: "Sample skin" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Midnight skin" }).getAttribute("aria-pressed")).toBe(
+    "true",
+  );
   fireEvent.click(screen.getByRole("button", { name: "Midnight skin" }));
   expect(onApply).toHaveBeenLastCalledWith({
     global_theme: "custom",
@@ -162,12 +186,31 @@ test("skins in the light and the dark slot are both in use, and tapping one agai
   expect(onApplied).not.toHaveBeenCalled();
 });
 
+// 浅色模式下不列深色主题；已选的深色主题在浅色下按「跟随系统」画，选中的也就是「跟随系统」。深色模式反过来。
+test("each mode offers only its own themes and shows a theme of the other mode as 跟随系统", () => {
+  grid({ globalTheme: "night" });
+  for (const name of ["水杉", "夜青", "墨"])
+    expect(screen.queryByRole("button", { name })).toBeNull();
+  expect(screen.getByRole("button", { name: "跟随系统" }).getAttribute("aria-pressed")).toBe(
+    "true",
+  );
+  cleanup();
+
+  grid({ globalTheme: "paper", keyboardTheme: "dark" });
+  for (const name of ["浅色", "纸白", "Sample skin"])
+    expect(screen.queryByRole("button", { name })).toBeNull();
+  expect(screen.getByRole("button", { name: "跟随系统" }).getAttribute("aria-pressed")).toBe(
+    "true",
+  );
+});
+
 test("a dark skin goes into the dark slot and keeps the light one", () => {
   const night: ExternalSkin = { ...sample, id: "midnight", name: "Midnight skin", base: "night" };
   const { onApply } = grid({
     globalTheme: "custom",
     customTheme: { base: "paper", candidate_skin: "sample" },
     packages: [sample, night],
+    keyboardTheme: "dark",
   });
   fireEvent.click(screen.getByRole("button", { name: "Midnight skin" }));
   expect(onApply).toHaveBeenLastCalledWith({
@@ -193,8 +236,8 @@ test("tapping a card applies it at once", () => {
   const { onApply, onSelectDesign } = grid({
     customTheme: { base: "light", candidate_colors: { text: "#112233" } },
   });
-  fireEvent.click(screen.getByRole("button", { name: "夜青" }));
-  expect(onApply).toHaveBeenLastCalledWith({ global_theme: "night" });
+  fireEvent.click(screen.getByRole("button", { name: "纸白" }));
+  expect(onApply).toHaveBeenLastCalledWith({ global_theme: "paper" });
   fireEvent.click(screen.getByRole("button", { name: "Sample skin" }));
   expect(onApply).toHaveBeenLastCalledWith({
     global_theme: "custom",

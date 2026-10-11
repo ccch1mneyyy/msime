@@ -316,11 +316,9 @@ public final class KeyboardSkin {
      * `#RRGGBB` stays as it is; `#RRGGBBAA` (alpha last, the shared contract's form) becomes `#AARRGGBB` (alpha first, Android's form). Anything else is null.
      */
     public static String androidColor(String value) {
-        if (value == null || !value.startsWith("#")) return null;
-        String digits = TextPolicy.uppercase(value.substring(1));
-        if (!digits.matches("[0-9A-F]{6}|[0-9A-F]{8}")) return null;
-        return digits.length() == 6 ? "#" + digits
-            : "#" + digits.substring(6) + digits.substring(0, 6);
+        Integer color = ColorPolicy.contractArgb(value);
+        if (color == null) return null;
+        return value.length() == 7 ? ColorPolicy.hexRgb(color) : ColorPolicy.hexArgb(color);
     }
 
     private static String slot(String value, String fallback) {

@@ -336,7 +336,7 @@ public final class BackendAccount {
     public static boolean validEmailCode(String code) {
         if (code == null || code.length() != 6) return false;
         for (int index = 0; index < code.length(); index++) {
-            if (code.charAt(index) < '0' || code.charAt(index) > '9') return false;
+            if (!TextPolicy.isAsciiDigit(code.charAt(index))) return false;
         }
         return true;
     }
@@ -943,7 +943,7 @@ public final class BackendAccount {
     }
 
     static boolean validClipboardItem(ClipboardItem item) {
-        return item != null && item.id() != null && item.id().matches("[0-9a-f]{" + HEX_ID_LENGTH + "}")
+        return item != null && TextPolicy.isLowerHex(item.id(), HEX_ID_LENGTH)
             && CloudClipboardTextPolicy.valid(item.text()) && item.updatedAt() != null
             && !item.updatedAt().isEmpty() && TextPolicy.utf8Length(item.updatedAt()) <= 128
             && !TextPolicy.hasControl(item.updatedAt())
@@ -952,7 +952,7 @@ public final class BackendAccount {
 
     public void deleteClipboard(String id) throws Exception {
         SessionCredential session = currentSession();
-        if (session.token().isEmpty() || (id != null && !id.matches("[0-9a-f]{" + HEX_ID_LENGTH + "}")))
+        if (session.token().isEmpty() || (id != null && !TextPolicy.isLowerHex(id, HEX_ID_LENGTH)))
             throw new IllegalStateException("invalid clipboard request");
         authorizedRequest("DELETE", id == null ? "/v1/users/me/clipboard" : "/v1/users/me/clipboard/" + id,
             null, session);
