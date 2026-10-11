@@ -36,17 +36,29 @@ public final class CandidateTranslationPolicy {
         return String.join("\n", glosses);
     }
 
-    /** Return the bounded, user-visible gloss rows that a long press may insert. */
+    /** 长按候选最多给出的可上屏义项数，与鸿蒙 {@code TranslationSensePolicy.MAX_SENSES} 相同。 */
+    public static final int MAX_INSERTION_SENSES = 9;
+
+    /**
+     * 长按候选可以上屏的义项：先按换行切成每种目标语言一行，再把每行按 {@code ;} 或全角 {@code ；} 切成义项，去掉首尾空白、空项和重复项，按目标语言顺序、行内义项顺序排列。
+     *
+     * <p>分号规则对应 {@code shared/input/GlossSenses.h} 的 {@code gloss_senses}（macOS、Linux、Windows 共用）。换行处有意与它不同：{@code gloss_senses} 把换行当义项内的折行，本宿主的换行是 {@link #joinGlosses} 写进去的语言分隔，所以先按换行切行。账号译文同样会被切开，一句本身含分号的译文会成为几项，桌面和鸿蒙也是这样。
+     */
     public static List<String> insertionGlosses(String translation) {
         if (translation == null || translation.isEmpty()) return List.of();
-        ArrayList<String> result = new ArrayList<>(MAX_TARGETS);
-        for (String value : translation.split("\\R", -1)) {
-            String gloss = TextPolicy.trimmed(value);
-            if (gloss.isEmpty() || result.contains(gloss)
-                    || TextPolicy.utf8Length(gloss) > 4096
-                    || TextPolicy.hasControl(gloss) || !TextPolicy.validUnicode(gloss)) continue;
-            result.add(gloss);
-            if (result.size() == MAX_TARGETS) break;
+        ArrayList<String> result = new ArrayList<>(MAX_INSERTION_SENSES);
+        String[] rows = translation.split("\\R", -1);
+        for (int row = 0; row < rows.length && result.size() < MAX_INSERTION_SENSES; row++) {
+            // 给后面的语言行各留一个位置，免得第一种语言的长释义把第二种语言整行挤出菜单。
+            int limit = MAX_INSERTION_SENSES - Math.min(rows.length - 1 - row, MAX_TARGETS - 1);
+            for (String value : rows[row].split("[;；]", -1)) {
+                if (result.size() >= limit) break;
+                String gloss = TextPolicy.trimmed(value);
+                if (gloss.isEmpty() || result.contains(gloss)
+                        || TextPolicy.utf8Length(gloss) > 4096
+                        || TextPolicy.hasControl(gloss) || !TextPolicy.validUnicode(gloss)) continue;
+                result.add(gloss);
+            }
         }
         return List.copyOf(result);
     }
