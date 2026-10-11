@@ -17,6 +17,7 @@ Shift 状态一变，紧跟着按下的字母常常没有反应，稍等一下�
 
 - 字母键面由 `LetterKeyFacePolicy.face(input, chineseMode, localMode, shifted)` 算，中英和本地模式的变化同样只影响键面，所以 Shift 顺带从中文切到英文（`toggleInputLanguage`）也走就地改，不要求 `chineseMode` 与建键时相同。
 - 微软双拼的 `;` 键不随大小写变，跳过。分离式键盘右半边重复的 G、V 在同一个列表里，一起改。
+- 分离式键盘第二行的切分位置和内侧 G 是否重复，建行时按当时第二行有没有微软双拼的 `;` 键（`microsoftTenKeys()`，随中英切换变）算一次，记在 `builtMicrosoftTenKeys`。分离式键盘下它和建行时不同（微软双拼中文空闲时按 Shift 切到英文）就整组重建，否则两半不等宽、少一个重复的 G。
 - 韩文键帽不在 `shuangpinKeyButtons` 里，另记 `koreanKeyButtons`，按 `KoreanKeyboardLayout.face/accessibilityLabel(key, shifted)` 改，Shift 换双辅音时同样不重建。
 - 字母键气泡在按下时读 `key.getText()`，不再用建键时记下的键面，否则就地改后气泡还显示旧的大小写。
 - 无障碍描述先写成不带提示的字母描述，与重建时一样；随后的 `render()` 里 `updateShuangpinKeyHints` 补上双拼提示后缀。

@@ -48,6 +48,8 @@ final class ImeLetterRows {
     private Boolean builtLayerPunctuation;
     /** 当前键行若是 {@link #rebuildKeyRows} 的通用分支在字母层建的，记下按哪个布局建；其他分支建的为 -1。只有这种键行能就地换大小写（{@link #refreshLetterCase}）。 */
     private int builtLetterLayout = -1;
+    /** 分离式键盘建行时第二行有没有算上微软双拼的 `;` 键（{@link #microsoftTenKeys}）；它决定两半的切分位置和内侧 G 是否重复，变了只能重建，不能就地换大小写。 */
+    private boolean builtMicrosoftTenKeys;
     /** 通用分支建的韩文键帽和它们的 QWERTY 字母，Shift 换的是双辅音键面，就地改它们（{@link #refreshLetterCase}）。 */
     private final java.util.List<Button> koreanKeyButtons = new java.util.ArrayList<>();
     private final java.util.List<String> koreanKeyInputs = new java.util.ArrayList<>();
@@ -436,7 +438,8 @@ final class ImeLetterRows {
         if (s.keyRows == null || builtLetterLayout < 0
                 || s.keyboardLayer != KeyboardLayout.Layer.LETTERS
                 || s.displayedTouchLayout(s.view) != builtLetterLayout
-                || s.twentySixKeyDigitFace() || splitStale() || numberRowStale()) return false;
+                || s.twentySixKeyDigitFace() || splitStale() || numberRowStale()
+                || builtSplit && microsoftTenKeys() != builtMicrosoftTenKeys) return false;
         // 与 rebuildKeyRows 通用分支里算键面的三项相同；中英和本地模式变了也只影响键面。
         boolean chineseMode = !s.dedicatedEnglish && !s.letterCaseSchemeActive();
         boolean localMode = s.view != null
@@ -696,7 +699,10 @@ final class ImeLetterRows {
                     LayoutPolicy.weightedMatchParentParams(1));
             }
         }
-        if (s.keyboardLayer == KeyboardLayout.Layer.LETTERS) builtLetterLayout = s.displayedTouchLayout(s.view);
+        if (s.keyboardLayer == KeyboardLayout.Layer.LETTERS) {
+            builtLetterLayout = s.displayedTouchLayout(s.view);
+            builtMicrosoftTenKeys = microsoftTenKeys();
+        }
         s.imeStyler.applyKeyboardGeometry();
     }
 
