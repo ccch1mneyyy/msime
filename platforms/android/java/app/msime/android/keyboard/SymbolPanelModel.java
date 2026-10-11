@@ -178,9 +178,8 @@ public final class SymbolPanelModel {
 
     /** 一页的游标是否自洽：条数不超过页大小，下一页从本页之后开始、前进不超过页大小，没读完时必须前进。与表情目录的规则相同。 */
     public static boolean validCatalogCursor(int requestedOffset, int count, long nextOffset, boolean complete) {
-        return requestedOffset >= 0 && count >= 0 && count <= CATALOG_PAGE_SIZE
-            && nextOffset >= requestedOffset && nextOffset <= (long) requestedOffset + CATALOG_PAGE_SIZE
-            && (complete || nextOffset > requestedOffset);
+        return BoundsPolicy.validPageCursor(requestedOffset, count, CATALOG_PAGE_SIZE,
+            nextOffset, complete);
     }
 
     /** 把新一页接在已显示的后面：同一个符号在目录里可能属于好几个小类（`symbol_catalog` 的主键是符号加小类），只显示第一次；总数不超过 {@link #MAX_CATALOG_ITEMS}。 */

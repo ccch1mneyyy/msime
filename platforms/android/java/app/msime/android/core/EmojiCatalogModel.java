@@ -53,10 +53,8 @@ public final class EmojiCatalogModel {
 
     public static Page validatePage(
             List<Item> items, int requestedOffset, int limit, long nextOffset, boolean complete) {
-        if (requestedOffset < 0 || limit < 1 || limit > 255 || items == null
-                || items.size() > limit || nextOffset < requestedOffset
-                || nextOffset > (long) requestedOffset + limit
-                || nextOffset > Integer.MAX_VALUE || (!complete && nextOffset == requestedOffset))
+        if (limit > 255 || items == null
+                || !BoundsPolicy.validPageCursor(requestedOffset, items.size(), limit, nextOffset, complete))
             throw new IllegalArgumentException("Invalid emoji catalog page");
         return new Page(items, (int) nextOffset, complete);
     }
