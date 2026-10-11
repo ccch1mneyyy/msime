@@ -4499,7 +4499,7 @@ public final class MSIMEInputService extends InputMethodService {
     /**
      * The global theme's keyboard resolved for one panel's own light/dark setting.
      *
-     * <p>An explicit `dark` or `light` on the surface wins; `follow` inherits the app mode (`theme`), and a `system` app mode follows the Android night mode. A missing or unknown value is `follow`, so an older snapshot keeps the keyboard's appearance rather than jumping to light. A theme with a fixed appearance then overrides that mode, which is what the shared resolver's `appearance` says.
+     * <p>面板自己的 `dark` 或 `light` 优先；`follow` 跟随应用的明暗（`theme`），应用为 `system` 时跟随 Android 的夜间模式。缺失或不认识的值按 `follow` 处理，旧快照因此保持键盘原来的明暗，不会跳回浅色。所选主题属于另一种明暗时按 `system` 画（{@link KeyboardSkin#effectiveTheme}），键盘因此始终和这块面板的明暗一致。
      */
     private KeyboardSkin surfaceSkin(JSONObject preferences, String key) {
         String surfaceMode = preferences == null ? "follow" : preferences.optString(key, "follow");
@@ -4510,7 +4510,7 @@ public final class MSIMEInputService extends InputMethodService {
             : InputViewValuePolicy.textOr(preferences, "global_theme", "system");
         JSONObject customTheme = preferences == null ? null
             : preferences.optJSONObject("custom_theme");
-        return themeSkin(globalTheme, customTheme, dark);
+        return themeSkin(KeyboardSkin.effectiveTheme(themeCatalog(), globalTheme, dark), customTheme, dark);
     }
 
     /**

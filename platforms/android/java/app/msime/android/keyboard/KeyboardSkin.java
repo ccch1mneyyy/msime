@@ -296,6 +296,31 @@ public final class KeyboardSkin {
             .toString();
     }
 
+    /** 固定明暗的主题只属于那一种明暗：浅色模式下不提供深色主题，深色模式下不提供浅色主题，否则键盘和周围的界面颜色反着，风格割裂。`system` 和 `custom` 没有固定明暗（`appearance` 为 null），两种模式都提供。 */
+    public static boolean fitsMode(String appearance, boolean dark) {
+        return appearance == null || "dark".equals(appearance) == dark;
+    }
+
+    /** 某一明暗下实际生效的全局主题：所选主题属于另一种明暗时按 `system` 画。偏好里存的值不改，切回原来的明暗时原来的主题照旧生效。 */
+    static String effectiveTheme(String id, String appearance, boolean dark) {
+        return fitsMode(appearance, dark) ? id : "system";
+    }
+
+    /** {@link #effectiveTheme(String, String, boolean)}，`appearance` 取自主题目录；目录里没有的 id 原样返回。 */
+    public static String effectiveTheme(JSONArray themes, String id, boolean dark) {
+        return effectiveTheme(id, themeAppearance(themes, id), dark);
+    }
+
+    /** 主题目录里某个全局主题的固定明暗（`dark` 或 `light`），没有固定明暗或目录里没有这个 id 时为 null。 */
+    public static String themeAppearance(JSONArray themes, String id) {
+        for (int index = 0; index < themes.length(); index++) {
+            JSONObject entry = themes.optJSONObject(index);
+            if (entry != null && id.equals(JsonPolicy.strictString(entry.opt("id"), "")))
+                return JsonPolicy.strictString(entry.opt("appearance"));
+        }
+        return null;
+    }
+
     /** The catalog title of one global theme id, or the id itself when the catalog does not list it. */
     public static String themeTitle(JSONArray themes, String id) {
         for (int index = 0; index < themes.length(); index++) {
