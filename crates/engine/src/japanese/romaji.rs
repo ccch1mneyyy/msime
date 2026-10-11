@@ -339,6 +339,14 @@ pub(crate) fn romaji_reading_into(input: &str, destination: &mut String) {
     destination.push_str(pending);
 }
 
+/// 宿主画在行内的读音：和 [`romaji_reading_into`] 只差末尾单个 `n`，它在这里还是待定的字母（`kan` 是 `かn`），后面再来一个 `n`、辅音、`'` 或 `-` 才定成ん。查词、确定和学习仍用 `romaji_reading_into` 的结果，末尾的 `n` 在那里照旧算ん。
+pub(crate) fn romaji_display_reading_into(input: &str, destination: &mut String) {
+    destination.clear();
+    let normalized = normalized_romaji(input);
+    let pending = scan_romaji_with(&normalized, true, |kana| destination.push_str(kana));
+    destination.push_str(pending);
+}
+
 /// 只判断是否有假名且没有待定尾部，不物化转换字符串。
 pub(crate) fn is_romaji_complete(input: &str) -> bool {
     let normalized = normalized_romaji(input);
@@ -348,12 +356,22 @@ pub(crate) fn is_romaji_complete(input: &str) -> bool {
 }
 
 /// 逐个发出假名，返回尚未消费的尾部；调用方持有规范化输入的存储。
-fn scan_romaji(normalized: &str, mut emit: impl FnMut(&'static str)) -> &str {
+fn scan_romaji(normalized: &str, emit: impl FnMut(&'static str)) -> &str {
+    scan_romaji_with(normalized, false, emit)
+}
+
+/// `keep_trailing_n` 为真时末尾单个 `n` 不发出ん，留在返回的尾部里（只给画读音用）。
+fn scan_romaji_with(
+    normalized: &str,
+    keep_trailing_n: bool,
+    mut emit: impl FnMut(&'static str),
+) -> &str {
     let bytes = normalized.as_bytes();
     let mut index = 0;
     while index < bytes.len() {
         if bytes[index] == b'n' {
             match bytes.get(index + 1).copied() {
+                None if keep_trailing_n => return &normalized[index..],
                 None => {
                     emit(MORAIC_N);
                     index += 1;
@@ -836,6 +854,33 @@ mod tests {
         require_conversion("n'a", "んあ", "", true);
         require_conversion("ko-hi-", "こーひー", "", true);
         require_conversion("n-", "んー", "", true);
+    }
+
+    /// 宿主画出来的读音把末尾单个 `n` 留作字母（#6997），和微软、Google 日文输入法一致；查词和确定仍按上面的规则把它当ん。
+    #[test]
+    fn display_reading_keeps_a_trailing_lone_n() {
+        let display = |input: &str| {
+            let mut reading = String::from("stale");
+            romaji_display_reading_into(input, &mut reading);
+            reading
+        };
+        assert_eq!(display("n"), "n");
+        assert_eq!(display("N"), "n");
+        assert_eq!(display("nn"), "ん");
+        assert_eq!(display("kan"), "かn");
+        assert_eq!(display("kann"), "かん");
+        assert_eq!(display("nnn"), "んn");
+        assert_eq!(display("nk"), "んk");
+        assert_eq!(display("n'"), "ん");
+        assert_eq!(display("n-"), "んー");
+        assert_eq!(display("ny"), "ny");
+        assert_eq!(display("konnnichiha"), "こんにちは");
+        assert_eq!(display(""), "");
+        require_conversion("n", "ん", "", true);
+        assert!(is_romaji_complete("kan"));
+        let mut reading = String::new();
+        romaji_reading_into("kan", &mut reading);
+        assert_eq!(reading, "かん");
     }
 
     #[test]

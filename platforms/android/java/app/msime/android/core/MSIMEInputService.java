@@ -1689,7 +1689,7 @@ public final class MSIMEInputService extends InputMethodService {
         }
         // A Stroke composition still marked here (the session stopped without CommitRaw) is stroke glyphs, not text: remove it rather than finish it into the document.
         if (connection != null && strokeCompositionMarked()) bridge.discard(sink(typingSource()));
-        else if (connection != null) bridge.abandon(sink(typingSource()));
+        else if (connection != null) finishCompositionInPlace(-1, -1, -1, -1);
         view = null;
         closeCandidatePanel();
         // 换编辑器时不让任何工具栏面板（含常用语）活下来，理由同 finishInputViewPresentation。
@@ -2493,20 +2493,7 @@ public final class MSIMEInputService extends InputMethodService {
             // that is already fullwidth, and would put this host's own rule ahead of the shared one.
             commit = chineseOutput(commit, result.optJSONObject("commit_context"));
         }
-        // Korean marks the composing Hangul, not the key letters editing_text holds; a transition may carry the syllable the key finished and the next one together, and the bridge writes the commit first. Zhuyin's editing_text is the Dachen keys too, and it marks the reading (the conversion and the pending bopomofo) by the same rule.
-        int nextViewScheme = InputViewValuePolicy.scheme(next, -1);
-        boolean nextDedicatedEnglish = InputViewValuePolicy.booleanValue(
-            next, "dedicated_english", dedicatedEnglish);
-        // 笔画的 editing_text 是字母 hspnzx，reading 才是用户按下的笔画字形（一丨丿丶乛＊），所以同样标记 reading。日语的 editing_text 是罗马字（九键的 ち 送的是 chi），reading 才是假名。哪些方案这样做由引擎的 `draws_reading` 决定。
-        String composing = KoreanInputPolicy.composing(
-            InputSchemeTraits.drawsReading(nextViewScheme) && !nextDedicatedEnglish,
-            InputViewValuePolicy.textOr(next, "phrase_prefix", ""), next.getString("editing_text"),
-            InputViewValuePolicy.textOr(next, "reading", ""));
-        // 九键的 editing_text 是按下的数字键（64426），写进输入框对用户没有意义；和 iOS 默认一样不在输入框里标记组词，组词只显示在键盘自己的预编辑栏上（选过的音节显示为拼音，如 ni'426）。注音 9 键例外：上面已经按大千的规则标记 reading（转换结果加未完成的数字），照常留在输入框里。14 键同理，editing_text 是组码字母（bugao），也不写进输入框；英文和本地模式画的是 26 键，照常标记。
-        boolean fourteenKeyGrid = !nextDedicatedEnglish && touchLayout(next) == FOURTEEN_KEY_LAYOUT;
-        if (ZhuyinInputPolicy.hidesNineKeyComposing(InputViewValuePolicy.booleanValue(
-                next, "nine_key", false) || fourteenKeyGrid,
-                ZhuyinInputPolicy.active(nextViewScheme, nextDedicatedEnglish))) composing = "";
+        String composing = composingText(next, next.getString("editing_text"), true);
         if (connection != null
                 && !bridge.apply(sink(typingSource()), commit, composing)) {
             throw new JSONException("Editor rejected update");
@@ -2519,6 +2506,41 @@ public final class MSIMEInputService extends InputMethodService {
         if (rebuildLayout) imeLetterRows.rebuildKeyRows();
         render();
         return strictBoolean(result, "handled");
+    }
+
+    /**
+     * 输入框组字区里写的文字。{@code drawn} 为真时取引擎让宿主画的读音 `display_reading`（日语末尾单个 `n` 还是字母），为假时取确定上屏的读音 `reading`（那个 `n` 已是ん）；其余方案两者相同。
+     */
+    private String composingText(JSONObject next, String editingText, boolean drawn) {
+        // Korean marks the composing Hangul, not the key letters editing_text holds; a transition may carry the syllable the key finished and the next one together, and the bridge writes the commit first. Zhuyin's editing_text is the Dachen keys too, and it marks the reading (the conversion and the pending bopomofo) by the same rule.
+        int nextViewScheme = InputViewValuePolicy.scheme(next, -1);
+        boolean nextDedicatedEnglish = InputViewValuePolicy.booleanValue(
+            next, "dedicated_english", dedicatedEnglish);
+        String reading = InputViewValuePolicy.textOr(next, "reading", "");
+        // 笔画的 editing_text 是字母 hspnzx，reading 才是用户按下的笔画字形（一丨丿丶乛＊），所以同样标记 reading。日语的 editing_text 是罗马字（九键的 ち 送的是 chi），reading 才是假名。哪些方案这样做由引擎的 `draws_reading` 决定。
+        String composing = KoreanInputPolicy.composing(
+            InputSchemeTraits.drawsReading(nextViewScheme) && !nextDedicatedEnglish,
+            InputViewValuePolicy.textOr(next, "phrase_prefix", ""), editingText,
+            drawn ? InputViewValuePolicy.textOr(next, "display_reading", reading) : reading);
+        // 九键的 editing_text 是按下的数字键（64426），写进输入框对用户没有意义；和 iOS 默认一样不在输入框里标记组词，组词只显示在键盘自己的预编辑栏上（选过的音节显示为拼音，如 ni'426）。注音 9 键例外：上面已经按大千的规则标记 reading（转换结果加未完成的数字），照常留在输入框里。14 键同理，editing_text 是组码字母（bugao），也不写进输入框；英文和本地模式画的是 26 键，照常标记。
+        boolean fourteenKeyGrid = !nextDedicatedEnglish && touchLayout(next) == FOURTEEN_KEY_LAYOUT;
+        if (ZhuyinInputPolicy.hidesNineKeyComposing(InputViewValuePolicy.booleanValue(
+                next, "nine_key", false) || fourteenKeyGrid,
+                ZhuyinInputPolicy.active(nextViewScheme, nextDedicatedEnglish))) composing = "";
+        return composing;
+    }
+
+    /**
+     * 不经引擎就结束输入框里的组字区（光标被移走、会话停下）时，组字区里的文字就留在文档里。日语末尾单个 `n` 画成字母，确定时却是ん，所以这时先换成确定的读音再结束，不把半截罗马字写进文档；用户点到的选区放回原处。画的和确定的相同时照旧原样结束。
+     */
+    private void finishCompositionInPlace(int composingStart, int composingEnd,
+            int selectionStart, int selectionEnd) {
+        String editingText = view == null ? "" : InputViewValuePolicy.editingText(view);
+        String drawn = view == null ? "" : composingText(view, editingText, true);
+        String settled = view == null ? "" : composingText(view, editingText, false);
+        if (drawn.equals(settled)) bridge.abandon(sink(typingSource()));
+        else bridge.settle(sink(typingSource()), settled, composingStart, composingEnd,
+            selectionStart, selectionEnd);
     }
 
     private boolean englishNineKeyActive() {
@@ -4210,7 +4232,7 @@ public final class MSIMEInputService extends InputMethodService {
             if (connection != null && strokeCompositionMarked()) {
                 bridge.discard(sink(typingSource()), composingStart, composingEnd, newStart, newEnd);
             } else if (connection != null) {
-                bridge.abandon(sink(typingSource()));
+                finishCompositionInPlace(composingStart, composingEnd, newStart, newEnd);
                 // 结束组字区也会有一条回报；记下它，免得它晚到时把用户紧接着开始的新组字当成光标移动取消掉。
                 selectionEcho.expect();
             }
@@ -8157,7 +8179,8 @@ public final class MSIMEInputService extends InputMethodService {
             String editingText = view == null ? "" : InputViewValuePolicy.editingText(view);
             boolean offersLocalModes = idle && supportsLocalTools();
             String localModeKey = view == null ? "none" : InputViewValuePolicy.textOr(view, "local_mode", "none");
-                    String reading = InputViewValuePolicy.textOr(view, "reading", "");
+                    String reading = InputViewValuePolicy.textOr(view, "display_reading",
+                InputViewValuePolicy.textOr(view, "reading", ""));
             // 九键的 editing_text 只是按下的数字。读音行显示引擎给的首选读法拼音（94'26 显示 xi'an），首行是英文词时退回 preedit（带拆分分界和选过的拼音，如 ni'426）。14 键同样显示 `nine_key_reading`，引擎在首行是英文词时也给出读音，不让组码字母（bugao）出现在读音行上。
             String nineKeyPreedit = "";
             if (view != null && "none".equals(localModeKey)

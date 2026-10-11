@@ -1192,6 +1192,41 @@ fn real_engine_cycles_the_last_japanese_kana_variant() {
     assert_eq!(session.snapshot().unwrap().reading, "か");
 }
 
+/// 末尾单个 `n` 在宿主画出的读音里还是字母（#6997）：只打一个 `n` 不会立刻变成ん，`nn` 退格一次能看到变化；`reading` 仍是确定时上屏的读音。
+#[test]
+fn japanese_display_reading_keeps_a_trailing_lone_n() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut value = options(dir.path());
+    value.scheme = 3;
+    let mut session = Session::new(&value).unwrap();
+    let readings = |session: &Session| {
+        let snapshot = session.snapshot().unwrap();
+        (snapshot.display_reading, snapshot.reading)
+    };
+    assert!(session.character(b'n', false).unwrap().handled);
+    assert_eq!(readings(&session), ("n".to_owned(), "ん".to_owned()));
+    assert!(session.character(b'n', false).unwrap().handled);
+    assert_eq!(readings(&session), ("ん".to_owned(), "ん".to_owned()));
+    assert!(session.command(Command::Backspace).unwrap().handled);
+    assert_eq!(readings(&session), ("n".to_owned(), "ん".to_owned()));
+    assert!(session.command(Command::Backspace).unwrap().handled);
+    assert_eq!(readings(&session), (String::new(), String::new()));
+    type_text(&mut session, b"kan");
+    assert_eq!(readings(&session), ("かn".to_owned(), "かん".to_owned()));
+    let committed = session.command(Command::CommitReading).unwrap();
+    assert!(committed.has_commit);
+    assert_eq!(committed.commit, "かん");
+
+    // 其他方案画的读音不变。
+    let mut value = options(dir.path());
+    value.scheme = 4;
+    let mut korean = Session::new(&value).unwrap();
+    type_text(&mut korean, b"gks");
+    let snapshot = korean.snapshot().unwrap();
+    assert!(!snapshot.reading.is_empty());
+    assert_eq!(snapshot.display_reading, snapshot.reading);
+}
+
 /// 录制器的单词条日文模型（读音 かな，词 甲），与 golden 场景 `ri_japanese_model_a` 同一份字节。
 const JAPANESE_MODEL_KANA: &str = "MSJPDT1\u{0}\u{1}\u{0}\u{0}\u{0}\u{1}\u{0}\u{0}\u{0}\u{1}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}8\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}L\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}N\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\t\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{6}\u{0}\u{6}\u{0}\u{0}\u{0}\u{3}\u{0}\u{0}\u{0}\u{0}\u{0}\u{1}\u{0}\u{0}\u{0}\u{0}\u{0}かな甲";
 

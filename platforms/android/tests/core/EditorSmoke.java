@@ -51,6 +51,32 @@ public final class EditorSmoke {
         bridge.discard(sink);
         check(sink.calls.equals(List.of("begin", "compose:", "finish", "end")));
         sink.calls.clear();
+        // 日语画的是「かn」（4..6），确定时是「かん」：光标移走时留下确定的文字，点到的选区原样放回。
+        check(bridge.apply(sink, null, "かn"));
+        sink.calls.clear();
+        bridge.settle(sink, "かん", 4, 6, 1, 3);
+        check(sink.calls.equals(List.of("begin", "compose:かん", "finish", "select:1,3", "end")));
+        sink.calls.clear();
+        bridge.settle(sink, "かん", 4, 6, 10, 10);
+        check(sink.calls.equals(List.of("begin", "compose:かん", "finish", "select:10,10", "end")));
+        sink.calls.clear();
+        // 新文字长短不同时，组字区之后的选区跟着平移，落在组字区里的不超出新文字。
+        bridge.settle(sink, "x", 4, 6, 10, 10);
+        check(sink.calls.equals(List.of("begin", "compose:x", "finish", "select:9,9", "end")));
+        sink.calls.clear();
+        bridge.settle(sink, "x", 4, 6, 6, 6);
+        check(sink.calls.equals(List.of("begin", "compose:x", "finish", "select:5,5", "end")));
+        sink.calls.clear();
+        bridge.settle(sink, "abcd", 4, 6, 5, 8);
+        check(sink.calls.equals(List.of("begin", "compose:abcd", "finish", "select:5,10", "end")));
+        sink.calls.clear();
+        // 会话停下时没有新选区，换完就结束，光标留在新文字末尾。
+        bridge.settle(sink, "かん", -1, -1, -1, -1);
+        check(sink.calls.equals(List.of("begin", "compose:かん", "finish", "end")));
+        sink.calls.clear();
+        check(bridge.apply(sink, null, ""));
+        check(sink.calls.equals(List.of("begin", "end")));
+        sink.calls.clear();
         // After a discard the bridge composes nothing, so an empty update does not touch the editor again.
         check(bridge.apply(sink, null, ""));
         check(sink.calls.equals(List.of("begin", "end")));

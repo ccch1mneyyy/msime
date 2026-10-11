@@ -73,6 +73,7 @@ public final class JapaneseNineKeyLayoutSmoke {
         check(!JapaneseNineKeyLayout.endsWithPendingRomaji("こー"));
         check(JapaneseNineKeyLayout.endsWithPendingRomaji("こんch"));
         check(JapaneseNineKeyLayout.endsWithPendingRomaji("こn'"));
+        check(JapaneseNineKeyLayout.endsWithPendingRomaji("こn"));
         check(JapaneseNineKeyLayout.endsWithPendingRomaji("c"));
         check(keys.stream().flatMap(key -> key.strokes().stream())
             .allMatch(stroke -> stroke.length() <= JapaneseNineKeyLayout.LONGEST_STROKE));
