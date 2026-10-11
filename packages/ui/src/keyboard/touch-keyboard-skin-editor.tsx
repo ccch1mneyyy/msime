@@ -725,6 +725,10 @@ export function TouchKeyboardSkinEditor({
                         background: preset.start,
                         gradientEnd: preset.end,
                         gradientHorizontal: false,
+                        keyBackground: preset.keyBackground,
+                        keyForeground: preset.keyForeground,
+                        accent: preset.accent,
+                        actionBackground: preset.actionBackground,
                       })
                     }
                     key={preset.title}

@@ -10,6 +10,7 @@ use crate::assets;
 use crate::diagnostics;
 use crate::error::{EngineError, Result};
 use crate::helpcode::{compute_helpcodes, load_helpcode_keymap, HelpcodeKeymap, SharedKeymap};
+use crate::japanese::romaji::romaji_display_reading_into;
 use crate::local::database::LocalDatabaseLease;
 use crate::nine_key::KeyGrid;
 use crate::pinyin::glide::{GlideKeyboard, GlidePoint};
@@ -82,6 +83,8 @@ pub struct EngineSnapshot {
     pub preedit: String,
     /// The kana reading in Japanese, the composed Hangul in Korean, the converted text plus the pending bopomofo in Zhuyin, the stroke glyphs (一丨丿丶乛＊) in Stroke, else empty. In Stroke each glyph stands for one ASCII letter of `editing_text`, so `caret_position` also counts glyphs.
     pub reading: String,
+    /// 宿主在行内画的读音：日文罗马字组字（非本地模式、非英文）时末尾单个 `n` 还没定成ん，按微软、Google 日文输入法的样子留作字母（`kan` 画成 `かn`，`kann` 才是 `かん`）；其余情况与 `reading` 相同。`reading` 仍是确定（`CommitReading`）上屏的读音，宿主不经引擎结束组字区、且编辑器仍报告着组字区时，应把它换成 `reading` 再结束；确认不了组字区还在时只结束组字（规则见 `msime_client.h` 的 `View.display_reading`）。
+    pub display_reading: String,
     pub editing_text: String,
     pub caret_position: usize,
     pub segment_raw_boundaries: Vec<u64>,
@@ -187,6 +190,18 @@ impl Session {
             self.helpcode_enabled && helpcode_scheme && !value.local_mode.generates_text()
         });
         let count = value.candidates.len();
+        let display_reading = if !value.scheme.draws_reading() {
+            String::new()
+        } else if value.scheme == SchemeType::JapaneseRomaji
+            && value.local_mode == LocalInputMode::None
+            && !value.dedicated_english
+        {
+            let mut reading = String::new();
+            romaji_display_reading_into(&value.raw_segmentation, &mut reading);
+            reading
+        } else {
+            value.normalized_segmentation.clone()
+        };
         let mut output = EngineSnapshot {
             local_mode: value.local_mode.name().to_owned(),
             spelling_symbols: value.spelling_symbols,
@@ -201,6 +216,7 @@ impl Session {
             microsoft_shuangpin: self.microsoft_shuangpin,
             shuangpin_profile: self.shuangpin_profile.clone(),
             preedit: value.preedit,
+            display_reading,
             reading: if value.scheme.draws_reading() {
                 value.normalized_segmentation
             } else {

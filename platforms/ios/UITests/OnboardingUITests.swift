@@ -1665,9 +1665,10 @@ final class OnboardingUITests: XCTestCase {
       link.tap()
       XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 5))
       if identifier == "skinSettingsLink" {
-        reveal(app.buttons["skin_night"], in: app)
-        app.buttons["skin_night"].tap()
-        XCTAssertEqual(app.buttons["skin_night"].value as? String, "已选择")
+        // 浅色模式下只列浅色主题和跟随系统、自定义，所以这里选纸白。
+        reveal(app.buttons["skin_paper"], in: app)
+        app.buttons["skin_paper"].tap()
+        XCTAssertEqual(app.buttons["skin_paper"].value as? String, "已选择")
       }
       if identifier == "voiceSettingsLink" {
         XCTAssertTrue(app.buttons["voiceLanguagePicker"].exists)

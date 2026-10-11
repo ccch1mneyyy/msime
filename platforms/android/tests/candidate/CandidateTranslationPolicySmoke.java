@@ -24,6 +24,33 @@ public final class CandidateTranslationPolicySmoke {
                 .equals(List.of("safe")), "oversized gloss rows are not insertable");
         check(CandidateTranslationPolicy.insertionGlosses("坏\uD800\n好")
                 .equals(List.of("好")), "invalid Unicode gloss rows are not insertable");
+        // 一行里用分号连起来的几个义项要能分别上屏（#6997）：长按「我的」只给一个「my; mine」，点了连分号一起上屏。
+        check(CandidateTranslationPolicy.insertionGlosses("my; mine").equals(List.of("my", "mine")),
+            "ASCII semicolon separates insertable senses");
+        check(CandidateTranslationPolicy.insertionGlosses("苹果；家伙").equals(List.of("苹果", "家伙")),
+            "full-width semicolon separates insertable senses");
+        check(CandidateTranslationPolicy.insertionGlosses(" ; ；").isEmpty(),
+            "whitespace-only senses are not insertable");
+        check(CandidateTranslationPolicy.insertionGlosses("a;;b").equals(List.of("a", "b"))
+                && CandidateTranslationPolicy.insertionGlosses(";; a ;").equals(List.of("a")),
+            "empty senses are dropped");
+        check(CandidateTranslationPolicy.insertionGlosses("my; my").equals(List.of("my")),
+            "a repeated sense is offered once");
+        check(CandidateTranslationPolicy.insertionGlosses("my; mine\nmon; ma")
+                .equals(List.of("my", "mine", "mon", "ma")),
+            "target rows keep their order and each row splits into its senses");
+        check(CandidateTranslationPolicy.insertionGlosses("my; mine\nmon")
+                .equals(List.of("my", "mine", "mon")),
+            "a line break stays the target separator, never part of a sense");
+        check(CandidateTranslationPolicy.insertionGlosses("hello; hi\nhello")
+                .equals(List.of("hello", "hi")),
+            "a sense shared by two targets is offered once");
+        check(CandidateTranslationPolicy.insertionGlosses("1;2;3;4;5;6;7;8;9;10")
+                .equals(List.of("1", "2", "3", "4", "5", "6", "7", "8", "9")),
+            "the long-press menu offers at most nine senses");
+        check(CandidateTranslationPolicy.insertionGlosses("1;2;3;4;5;6;7;8;9;10\nb")
+                .equals(List.of("1", "2", "3", "4", "5", "6", "7", "8", "b")),
+            "a long first target still leaves the second target a menu item");
         check(CandidateTranslationPolicy.glossLines(List.of("en"), true, false, Set.of()) == 1,
             "offline English keeps its row when online translation is off");
         check(CandidateTranslationPolicy.glossLines(List.of("ja"), true, false, Set.of()) == 0,

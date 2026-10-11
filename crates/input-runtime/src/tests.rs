@@ -257,6 +257,48 @@ fn online_provider_deduplicates_before_enforcing_source_quota() {
 
 #[cfg(unix)]
 #[test]
+fn online_provider_filtered_sources_keep_empty_result_unallocated() {
+    let directory = private_tempdir();
+    let socket = directory.path().join("online.sock");
+    let listener = UnixListener::bind(&socket).unwrap();
+    let server = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut line = String::new();
+        std::io::BufRead::read_line(
+            &mut std::io::BufReader::new(stream.try_clone().unwrap()),
+            &mut line,
+        )
+        .unwrap();
+        std::io::Write::write_all(
+            &mut stream,
+            br#"{"candidates":[{"text":"cloud","source":0}]}"#,
+        )
+        .unwrap();
+        std::io::Write::write_all(&mut stream, b"\n").unwrap();
+    });
+    let query: OnlineQuery = serde_json::from_value(json!({
+        "scheme": 0,
+        "generation": 1,
+        "identity": "identity",
+        "query_text": "nihao",
+        "cache_key": "cache",
+        "pinyin_segments": ["ni", "hao"],
+        "cloud_eligible": true,
+        "cloud_candidates": false,
+        "ai_eligible": false,
+        "session_id": 5
+    }))
+    .unwrap();
+    let result = UnixSocketProvider::new(socket)
+        .query_candidates(query)
+        .unwrap();
+    assert!(result.is_empty());
+    assert_eq!(result.capacity(), 0);
+    server.join().unwrap();
+}
+
+#[cfg(unix)]
+#[test]
 fn online_provider_rejects_control_characters_in_query_fields() {
     let directory = private_tempdir();
     let socket = directory.path().join("missing.sock");
@@ -975,6 +1017,7 @@ impl InputEngine for Fixture {
             dedicated_english: self.dedicated_english,
             preedit: self.text.clone(),
             reading: self.reading.clone(),
+            display_reading: self.reading.clone(),
             editing_text: self.text.clone(),
             caret_position: self.text.len(),
             segment_raw_boundaries: vec![],
@@ -1835,6 +1878,7 @@ impl InputEngine for PhraseEngine {
             dedicated_english: false,
             preedit: self.reading.clone(),
             reading: String::new(),
+            display_reading: String::new(),
             editing_text: self.reading.clone(),
             caret_position: self.caret.min(self.reading.len()),
             segment_raw_boundaries: Vec::new(),
@@ -3993,6 +4037,7 @@ impl InputEngine for DigitCommitsEngine {
             dedicated_english: false,
             preedit: self.reading.clone(),
             reading: self.reading.clone(),
+            display_reading: self.reading.clone(),
             editing_text: self.reading.clone(),
             caret_position: self.reading.len(),
             segment_raw_boundaries: Vec::new(),
@@ -4833,6 +4878,7 @@ impl InputEngine for WubiMixedEngine {
             dedicated_english: false,
             preedit: self.reading.clone(),
             reading: String::new(),
+            display_reading: String::new(),
             editing_text: self.reading.clone(),
             caret_position: self.reading.len(),
             segment_raw_boundaries: Vec::new(),
@@ -5721,6 +5767,7 @@ impl InputEngine for SpellingMarksEngine {
             dedicated_english: false,
             preedit: self.text.clone(),
             reading: String::new(),
+            display_reading: String::new(),
             editing_text: self.text.clone(),
             caret_position: self.text.len(),
             segment_raw_boundaries: Vec::new(),

@@ -46,6 +46,13 @@ final class ImeLetterRows {
     private boolean builtNumberRow;
     /** 123 / #+= 层建的时候用的标点：全角中文或半角英文。中文标点开关变了要重建，否则键面和上屏的还是旧的。 */
     private Boolean builtLayerPunctuation;
+    /** 当前键行若是 {@link #rebuildKeyRows} 的通用分支在字母层建的，记下按哪个布局建；其他分支建的为 -1。只有这种键行能就地换大小写（{@link #refreshLetterCase}）。 */
+    private int builtLetterLayout = -1;
+    /** 分离式键盘建行时第二行有没有算上微软双拼的 `;` 键（{@link #microsoftTenKeys}）；它决定两半的切分位置和内侧 G 是否重复，变了只能重建，不能就地换大小写。 */
+    private boolean builtMicrosoftTenKeys;
+    /** 通用分支建的韩文键帽和它们的 QWERTY 字母，Shift 换的是双辅音键面，就地改它们（{@link #refreshLetterCase}）。 */
+    private final java.util.List<Button> koreanKeyButtons = new java.util.ArrayList<>();
+    private final java.util.List<String> koreanKeyInputs = new java.util.ArrayList<>();
 
     /** 新设计的 123 / #+= 层画在哪些界面上：26 键（含韩文键面）、底行与 26 键相同的 14 键，以及把符号页交给 26 键行的手写、笔画和注音 9 键。这一层的字符键原样上屏、不经 Engine，所以注音 9 键的数字页不会被读成音键；大千注音的数字和标点键另有用途，保留原符号行。 */
     static boolean drawsDesignLayer(int touchLayout) {
@@ -140,7 +147,7 @@ final class ImeLetterRows {
     /**
      * 字母键的按压：开着「按键弹出」（`touch_key_popup`）时浮出气泡。开着「滑动输入符号」（`platform.android.swipe_down_symbols`）时，沿设置的方向（`platform.android.swipe_symbols_direction`）滑过 14 dp 松手输入右上角的提示字符；长按到系统长按时长也输入它，长按不受这两项设置影响。两种手势触发后气泡改显示提示字符，没有触发时照常交给按钮自己的点击。
      */
-    private void bindLetterGestures(Button key, String face, String hint) {
+    private void bindLetterGestures(Button key, String hint) {
         final float[] downY = new float[1];
         final boolean[] triggered = new boolean[1];
         Runnable hold = () -> {
@@ -154,7 +161,8 @@ final class ImeLetterRows {
                 case MotionEvent.ACTION_DOWN -> {
                     downY[0] = DimensionPolicy.fromPixels(s, event.getY());
                     triggered[0] = false;
-                    if (touchPreference(AndroidLocalSettings.KEY_POPUP)) showKeyPreview(key, face);
+                    // 气泡读按下这一刻的键面：大小写变化是就地改键面（refreshLetterCase），建键时的键面可能已经过时。
+                    if (touchPreference(AndroidLocalSettings.KEY_POPUP)) showKeyPreview(key, key.getText().toString());
                     if (hint != null) {
                         key.removeCallbacks(hold);
                         key.postDelayed(hold, ViewConfiguration.getLongPressTimeout());
@@ -417,9 +425,49 @@ final class ImeLetterRows {
         if (s.quickDeleteOverlay != null) s.quickDeleteOverlay.hide();
     }
 
+    /**
+     * 大小写变了（Shift、一次性大写用掉、自动大写，或 Shift 顺带从中文切到英文）之后更新字母键。键行是通用分支在字母层建的，且布局、分离式键盘、数字行都和建的时候一样时，就地改每个字母键的键面和无障碍描述；否则整组重建。
+     *
+     * <p>不重建是 #6997 第 5 项的修法：重建会先 `removeAllViews` 再建新键，新键在下一次布局之前宽高都是 0，这段时间里落下的按压找不到键被整个丢掉；按在旧键上的手指也会因为旧键被摘下而收不到抬起。大小写只改键面，不改键的个数和位置，所以原来的键可以留着。
+     */
+    void refreshLetterCase() {
+        if (!relabelLetterCase()) rebuildKeyRows();
+    }
+
+    private boolean relabelLetterCase() {
+        if (s.keyRows == null || builtLetterLayout < 0
+                || s.keyboardLayer != KeyboardLayout.Layer.LETTERS
+                || s.displayedTouchLayout(s.view) != builtLetterLayout
+                || s.twentySixKeyDigitFace() || splitStale() || numberRowStale()
+                || builtSplit && microsoftTenKeys() != builtMicrosoftTenKeys) return false;
+        // 与 rebuildKeyRows 通用分支里算键面的三项相同；中英和本地模式变了也只影响键面。
+        boolean chineseMode = !s.dedicatedEnglish && !s.letterCaseSchemeActive();
+        boolean localMode = s.view != null
+            && !"none".equals(JsonPolicy.strictStringOrEmpty(s.view.opt("local_mode")));
+        boolean shifted = s.letterCase.usesUppercase();
+        for (int index = 0; index < s.shuangpinKeyButtons.size(); index++) {
+            String input = s.shuangpinKeyInputs.get(index);
+            if (";".equals(input)) continue;
+            Button key = s.shuangpinKeyButtons.get(index);
+            key.setText(LetterKeyFacePolicy.face(input, chineseMode, localMode, shifted));
+            key.setContentDescription(LetterKeyFacePolicy.accessibilityLabel(
+                input, chineseMode, localMode, shifted));
+        }
+        for (int index = 0; index < koreanKeyButtons.size(); index++) {
+            String input = koreanKeyInputs.get(index);
+            Button key = koreanKeyButtons.get(index);
+            key.setText(KoreanKeyboardLayout.face(input, shifted));
+            key.setContentDescription(KoreanKeyboardLayout.accessibilityLabel(input, shifted));
+        }
+        return true;
+    }
+
     void rebuildKeyRows() {
         if (s.keyRows == null) return;
         builtLayerPunctuation = null;
+        builtLetterLayout = -1;
+        koreanKeyButtons.clear();
+        koreanKeyInputs.clear();
         // 九键、手写、123 层等提前返回的分支都不画数字行；画的时候在下面再记上。
         builtNumberRow = false;
         boolean split = s.splitKeyboardDrawn();
@@ -556,6 +604,8 @@ final class ImeLetterRows {
                     KoreanKeyboardLayout.accessibilityLabel(key, shifted));
                 if (keyButton instanceof KeyboardPressButton press)
                     press.setKeyboardRole(KeyboardKeyRole.KEY);
+                koreanKeyButtons.add(keyButton);
+                koreanKeyInputs.add(input);
             } else if (s.keyboardLayer == KeyboardLayout.Layer.LETTERS) {
                 ShuangpinHintButton hintButton = s.shuangpinKeyboardKey(
                     face, face, () -> s.type(input.charAt(0)));
@@ -565,7 +615,7 @@ final class ImeLetterRows {
                 String hint = standardLetters ? LetterHintTable.hint(input) : null;
                 hintButton.setCornerHint(hint);
                 KeyboardTypographyPolicy.setKeyTextSize(hintButton, 22);
-                bindLetterGestures(hintButton, face, hint);
+                bindLetterGestures(hintButton, hint);
             } else {
                 keyButton = s.keyboardKey(face, face, () -> s.type(input.charAt(0)));
             }
@@ -648,6 +698,10 @@ final class ImeLetterRows {
                 if (inner >= 0) row.addView(characterKey.apply(keys.get(inner)), cut + 1,
                     LayoutPolicy.weightedMatchParentParams(1));
             }
+        }
+        if (s.keyboardLayer == KeyboardLayout.Layer.LETTERS) {
+            builtLetterLayout = s.displayedTouchLayout(s.view);
+            builtMicrosoftTenKeys = microsoftTenKeys();
         }
         s.imeStyler.applyKeyboardGeometry();
     }

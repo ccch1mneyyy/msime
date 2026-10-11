@@ -102,7 +102,7 @@ public final class JapaneseNineKeyLayout {
     /** The longest stroke a key sends (`shi`, `chi`, `tsu`): one kana never takes more deletes than this. */
     public static final int LONGEST_STROKE = 3;
 
-    /** Whether the composed reading ends in romaji the Engine has not turned into kana yet (`こんch`, `こn'`): a nine-key delete keeps going until it does not, so one press removes one whole kana. */
+    /** 画出来的读音（`display_reading`）末尾是否还挂着引擎没转成假名的罗马字（`こんch`、`こn`）：九键的删除一直删到不再挂着为止，按一次删掉一整个假名。 */
     public static boolean endsWithPendingRomaji(String reading) {
         if (reading == null || reading.isEmpty()) return false;
         char last = reading.charAt(reading.length() - 1);

@@ -120,6 +120,8 @@ pub struct View {
     pub phrase_prefix: String,
     /// Engine-owned kana reading for Japanese, the composing Hangul for Korean (the text a host marks inline); empty for other schemes.
     pub reading: String,
+    /// 行内画出来的读音：日文罗马字末尾单个 `n` 留作字母（`かn`），其余与 [`View::reading`] 相同。`reading` 才是确定时上屏的读音，宿主不经引擎结束组字区、且组字区还在时应换成 `reading` 再结束（规则见 `msime_client.h` 的 `View.display_reading`）。
+    pub display_reading: String,
     pub editing_text: String,
     /// Byte offset in Engine's ASCII editing_text, not an OS UTF-16 offset.
     pub caret_position: usize,

@@ -889,7 +889,7 @@ final class ImeLayoutRows {
         for (int index = 0; index < input.length(); index++) s.character(input.charAt(index));
     }
 
-    /** 九键的一个假名背后是一串罗马字（ち 是 chi），引擎的退格一次只删一个字母；接着删到读音末尾不再挂着半截罗马字，按一次就删掉一整个假名。 */
+    /** 九键的一个假名背后是一串罗马字（ち 是 chi），引擎的退格一次只删一个字母；接着删到读音末尾不再挂着半截罗马字，按一次就删掉一整个假名。看的是画出来的读音 `display_reading`：な（`na`）删掉 `a` 剩下的 `n` 在那里还是字母，会接着删掉，而确定用的 `reading` 已把它当成ん。 */
     void deleteJapaneseKana() {
         resetJapaneseToggle();
         if (s.connection == null) return;
@@ -898,7 +898,8 @@ final class ImeLayoutRows {
             return;
         }
         for (int extra = 1; extra < JapaneseNineKeyLayout.LONGEST_STROKE && s.view != null
-                && JapaneseNineKeyLayout.endsWithPendingRomaji(InputViewValuePolicy.text(s.view, "reading")); extra++) {
+                && JapaneseNineKeyLayout.endsWithPendingRomaji(InputViewValuePolicy.textOr(s.view, "display_reading",
+                    InputViewValuePolicy.text(s.view, "reading"))); extra++) {
             if (!s.command(0)) return;
         }
     }
