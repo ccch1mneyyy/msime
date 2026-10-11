@@ -12,7 +12,7 @@ Status: implemented
 
 - 主题目录里带 `appearance` 的主题只在对应的明暗下提供：浅色模式只列 `light`、`paper`，深色模式只列 `shuishan`、`night`、`ink`。`system` 和 `custom` 的 `appearance` 为空，两种模式都列。
 - 已选的主题属于另一种明暗时，按 `system` 画，面板和网格里也是「跟随系统」显示为选中。所选的值不改写：切回原来的明暗，原来的主题照旧生效。
-- 设置页皮肤网格里的外部皮肤包按 `skinDrawsIn(base, dark)` 同样过滤。
+- 只过滤目录里的内置主题。社区和本机的皮肤包是用户自己装的，两种明暗下都列出：最初也按 `skinDrawsIn(base, dark)` 过滤过，结果浅色模式下 base 是深色主题的社区皮肤全不见了，用户以为皮肤丢了，所以撤掉。
 - 鸿蒙键盘侧由 `GlobalTheme.fitsMode` / `GlobalTheme.effectiveId` 决定，`KeyboardSession.resolveTheme`、`keyboardSkin`、`themeSkins` 都经过它；设置页侧在 `skinGridCards` 里做同样的判断。
 
 ## Alternatives considered

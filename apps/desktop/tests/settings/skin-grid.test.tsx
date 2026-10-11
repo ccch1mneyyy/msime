@@ -151,7 +151,7 @@ test("a package in use wins over the custom design it is drawn with", () => {
   );
 });
 
-// 浅色、深色两个槽位里的皮肤包都算在用，但每种明暗只列出自己那一款：浅色下是浅色槽位的，深色下是深色槽位的；再点一次只把它从自己的槽位取下。
+// 浅色、深色两个槽位里的皮肤包都算在用，两种明暗下都列出、都打勾；再点一次只把它从自己的槽位取下。
 test("skins in the light and the dark slot are both in use, and tapping one again takes it out", () => {
   const night: ExternalSkin = { ...sample, id: "midnight", name: "Midnight skin", base: "night" };
   const customTheme = {
@@ -159,12 +159,13 @@ test("skins in the light and the dark slot are both in use, and tapping one agai
     candidate_skin: "sample",
     candidate_skin_dark: "midnight",
   } as const;
-  grid({ globalTheme: "custom", customTheme, packages: [sample, night] });
-  expect(screen.getByRole("button", { name: "Sample skin" }).getAttribute("aria-pressed")).toBe(
-    "true",
-  );
-  expect(screen.queryByRole("button", { name: "Midnight skin" })).toBeNull();
-  cleanup();
+  for (const keyboardTheme of ["light", "dark"] as const) {
+    grid({ globalTheme: "custom", customTheme, packages: [sample, night], keyboardTheme });
+    for (const name of ["Sample skin", "Midnight skin"])
+      expect(screen.getByRole("button", { name }).getAttribute("aria-pressed")).toBe("true");
+    expect(document.querySelectorAll("[data-skin-check]")).toHaveLength(2);
+    cleanup();
+  }
 
   const onApplied = vi.fn();
   const { onApply } = grid({
@@ -174,10 +175,6 @@ test("skins in the light and the dark slot are both in use, and tapping one agai
     keyboardTheme: "dark",
     onApplied,
   });
-  expect(screen.queryByRole("button", { name: "Sample skin" })).toBeNull();
-  expect(screen.getByRole("button", { name: "Midnight skin" }).getAttribute("aria-pressed")).toBe(
-    "true",
-  );
   fireEvent.click(screen.getByRole("button", { name: "Midnight skin" }));
   expect(onApply).toHaveBeenLastCalledWith({
     global_theme: "custom",
@@ -197,8 +194,9 @@ test("each mode offers only its own themes and shows a theme of the other mode a
   cleanup();
 
   grid({ globalTheme: "paper", keyboardTheme: "dark" });
-  for (const name of ["浅色", "纸白", "Sample skin"])
-    expect(screen.queryByRole("button", { name })).toBeNull();
+  for (const name of ["浅色", "纸白"]) expect(screen.queryByRole("button", { name })).toBeNull();
+  // 皮肤包不按明暗过滤：base 是浅色主题的包在深色下照样列出。
+  expect(screen.getByRole("button", { name: "Sample skin" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "跟随系统" }).getAttribute("aria-pressed")).toBe(
     "true",
   );

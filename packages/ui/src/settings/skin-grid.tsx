@@ -10,7 +10,6 @@ import {
   applyCandidateSkin,
   keyboardThemeId,
   removeCandidateSkin,
-  skinDrawsIn,
   skinSlot,
   themeEntry,
   type BaseGlobalTheme,
@@ -184,9 +183,8 @@ function skinGridCards({
       deselect: customDesign.onEdit,
       opens: Boolean(customDesign.onEdit),
     });
+  // 社区和本机的皮肤包是用户自己装的，两种明暗下都列出，不按 base 的明暗过滤；只有目录里的内置主题按明暗提供。
   for (const skin of packages) {
-    // 皮肤包同样只在它的 base 所属的明暗下提供。
-    if (!skinDrawsIn(skin.base, dark)) continue;
     cards.push({
       key: `package:${skin.id}`,
       title: skin.name,
