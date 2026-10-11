@@ -1647,6 +1647,7 @@ public final class MSIMEInputService extends InputMethodService {
     }
 
     private void stop(boolean finish) {
+        pendingEngineStartup = -1;
         // Rebuilding the Engine (including an in-place privacy-mode restart) invalidates any
         // clipboard image copy still running on the worker. Its completion must not submit an
         // image after the user has enabled the privacy gate.
@@ -1716,6 +1717,7 @@ public final class MSIMEInputService extends InputMethodService {
      * the session after the bounded maintenance transaction has finished.
      */
     private void scheduleEngineStartup(String options, long generation) {
+        pendingEngineStartup = generation;
         Runnable complete = () -> {
             if (generation != engineStartGeneration || connection == null || session != 0) return;
             startEngineSession(options, null);
@@ -3714,6 +3716,33 @@ public final class MSIMEInputService extends InputMethodService {
             .putInt(TOUCH_LAYOUT_HINT_KEY, layout).apply();
     }
 
+    // 双拼键上的提示同理（#6997）：view 没到时没有方案可查，提示全空、字母居中，会话一到提示和 11dp 下边距同时出现，整排字母往上一跳。记下上次的双拼方案，和布局记在同一个 SharedPreferences 里。
+    private static final String SHUANGPIN_PROFILE_HINT_KEY = "shuangpin_profile";
+    private String shuangpinProfileHint;
+
+    private String shuangpinProfileHint() {
+        if (shuangpinProfileHint == null) {
+            shuangpinProfileHint = getSharedPreferences(TOUCH_LAYOUT_HINT_PREFERENCES, MODE_PRIVATE)
+                .getString(SHUANGPIN_PROFILE_HINT_KEY, "");
+        }
+        return shuangpinProfileHint;
+    }
+
+    private void rememberShuangpinProfile(String profile) {
+        if (profile.equals(shuangpinProfileHint())) return;
+        shuangpinProfileHint = profile;
+        getSharedPreferences(TOUCH_LAYOUT_HINT_PREFERENCES, MODE_PRIVATE).edit()
+            .putString(SHUANGPIN_PROFILE_HINT_KEY, profile).apply();
+    }
+
+    /** scheduleEngineStartup 排上、还没建好也没作废的那次会话启动所属的代次；没有时为 -1。 */
+    private long pendingEngineStartup = -1;
+
+    /** 有一次会话启动在路上：排上之后没有换代（换输入框、收起、销毁都会换代），也没有被 stop 取消（建会话失败、输入连接失败都经过 stop）。 */
+    private boolean engineStartupPending() {
+        return session == 0 && pendingEngineStartup >= 0 && pendingEngineStartup == engineStartGeneration;
+    }
+
     boolean sendsChinesePunctuation() {
         return view != null && ChineseSymbolFaces.shouldUseChineseFaces(dedicatedEnglish,
             InputViewValuePolicy.scheme(view, -1), InputViewValuePolicy.textOr(view, "local_mode", "none"), chinesePunctuation);
@@ -3778,9 +3807,21 @@ public final class MSIMEInputService extends InputMethodService {
     }
 
     private void updateShuangpinKeyHints() {
-        int scheme = view == null ? -1 : InputViewValuePolicy.scheme(view, -1);
-        String profile = InputViewValuePolicy.textOr(view, "shuangpin_profile", "");
-        String localMode = view == null ? "none" : InputViewValuePolicy.textOr(view, "local_mode", "none");
+        int scheme;
+        String profile;
+        String localMode;
+        if (view != null) {
+            scheme = InputViewValuePolicy.scheme(view, -1);
+            profile = InputViewValuePolicy.textOr(view, "shuangpin_profile", "");
+            localMode = InputViewValuePolicy.textOr(view, "local_mode", "none");
+            rememberShuangpinProfile(ShuangpinKeyHintPolicy.rememberedProfile(scheme, profile));
+        } else {
+            // view 还没到时按上次的双拼方案画，和 touchLayoutHint 同理；会话到达后方案不同由这次之后的 render 改正。
+            profile = ShuangpinKeyHintPolicy.profileWithoutView(
+                session != 0 || engineStartupPending(), shuangpinProfileHint());
+            scheme = profile.isEmpty() ? -1 : 1;
+            localMode = "none";
+        }
         boolean chineseMode = !dedicatedEnglish && !letterCaseSchemeActive();
         boolean local = view != null && !"none".equals(localMode);
         boolean shifted = letterCase.usesUppercase();

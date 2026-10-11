@@ -60,6 +60,12 @@ if rg -U -n '(consumeLetter\(\)\)\s*\{?|letterCase\.toggle\(SystemClock\.uptimeM
   echo "A letter-case change must relabel the keys in place (ImeLetterRows.refreshLetterCase), not rebuild the rows" >&2
   exit 1
 fi
+# 换应用、换页面时会话要在后台建一两秒，view 那之前是空的（#6997）：双拼提示按上次记下的方案画，不能因为 view 暂时为空就清掉，否则会话一到提示和下边距同时出现，整排字母跳一下。
+if ! rg -q 'ShuangpinKeyHintPolicy\.profileWithoutView\(' \
+    "$repo_root/platforms/android/java/app/msime/android/core/MSIMEInputService.java"; then
+  echo "Double-pinyin key hints must keep the remembered profile while the view is briefly missing" >&2
+  exit 1
+fi
 # Hangul composition is Engine state. Android labels the Dubeolsik keys and sends their ASCII letters; a syllable table here would be a second automaton that can drift from the Engine's.
 if ! rg -q '4 korean' "$repo_root/crates/host-api/include/msime_client.h" \
   || ! rg -q 'KOREAN_SCHEME = 4;' \

@@ -31,6 +31,19 @@ public final class ShuangpinKeyHintPolicySmoke {
                 .isEmpty(), "Invalid key cannot enter the hint map");
         check(ShuangpinKeyHintPolicy.decode("not json").isEmpty(),
             "Malformed native response hides hints");
+        // 换应用或换页面时 view 要等会话建好才到（#6997）：那之前按上次记下的双拼方案画提示，提示和下边距不会在会话到达时才出现、让整排字母跳一下。
+        check(ShuangpinKeyHintPolicy.rememberedProfile(1, "xiaohe").equals("xiaohe"),
+            "A double-pinyin view is remembered by its profile");
+        check(ShuangpinKeyHintPolicy.rememberedProfile(0, "xiaohe").isEmpty()
+                && ShuangpinKeyHintPolicy.rememberedProfile(1, null).isEmpty(),
+            "Other schemes remember no profile");
+        check(ShuangpinKeyHintPolicy.profileWithoutView(true, "xiaohe").equals("xiaohe"),
+            "While the session starts the remembered profile draws the hints");
+        check(ShuangpinKeyHintPolicy.profileWithoutView(false, "xiaohe").isEmpty(),
+            "An editor without an Engine session (password, failed start) draws no hints");
+        check(ShuangpinKeyHintPolicy.profileWithoutView(true, "").isEmpty()
+                && ShuangpinKeyHintPolicy.profileWithoutView(true, null).isEmpty(),
+            "Nothing remembered draws no hints");
         System.out.println("Android double-pinyin key hints passed");
     }
 }
