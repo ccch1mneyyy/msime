@@ -520,3 +520,41 @@ test("saved designs follow 我的皮肤, the one in use is checked, and tapping 
     cleanup();
   }
 });
+
+// 社区皮肤排在皮肤库的设计之后，已获取的（同一 id，大小写不论）不再重复；点一下就获取并换上，获取失败时不计入换装统计。
+test("community skins follow the saved designs, skip ones already taken, and count only when applied", async () => {
+  const panda = { ...design, accent: 0x1f6b4a };
+  const fox = { ...design, background: 0x1b2340 };
+  const snow = { ...design, background: 0xdde6f0 };
+  const onSelectCommunitySkin = vi.fn(async () => true);
+  const onApplied = vi.fn();
+  grid({
+    savedDesigns: [{ id: "PANDA", name: "竹林熊猫茶会", design: panda }],
+    onSelectSavedDesign: vi.fn(),
+    communitySkins: [
+      { id: "panda", name: "竹林熊猫茶会", design: panda },
+      { id: "fox", name: "月光狐狸茶屋", design: fox },
+      { id: "snow", name: "极光雪山小屋", design: snow },
+    ],
+    onSelectCommunitySkin,
+    onApplied,
+  });
+  const names = cardNames();
+  expect(names.filter((name) => name === "竹林熊猫茶会")).toHaveLength(1);
+  expect(names.indexOf("月光狐狸茶屋")).toBeGreaterThan(names.indexOf("竹林熊猫茶会"));
+  expect(names.indexOf("极光雪山小屋")).toBeGreaterThan(names.indexOf("月光狐狸茶屋"));
+  fireEvent.click(screen.getByRole("button", { name: "月光狐狸茶屋" }));
+  await waitFor(() => expect(onApplied).toHaveBeenCalledWith("custom"));
+  expect(onSelectCommunitySkin).toHaveBeenCalledWith({
+    id: "fox",
+    name: "月光狐狸茶屋",
+    design: fox,
+  });
+
+  onApplied.mockClear();
+  onSelectCommunitySkin.mockResolvedValueOnce(false);
+  fireEvent.click(screen.getByRole("button", { name: "极光雪山小屋" }));
+  await waitFor(() => expect(onSelectCommunitySkin).toHaveBeenCalledTimes(2));
+  await act(async () => undefined);
+  expect(onApplied).not.toHaveBeenCalled();
+});
