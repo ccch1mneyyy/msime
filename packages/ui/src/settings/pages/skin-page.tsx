@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ThemeMode } from "../../index";
 import * as settings from "../settings-style";
 import { SettingsGroupBlock } from "../settings-group-block";
@@ -32,6 +32,7 @@ import {
   AiSkinGeneration,
   TouchKeyboardSkinEditor,
 } from "../../keyboard/touch-keyboard-skin-editor";
+import type { SavedTouchKeyboardSkin } from "../../keyboard/touch-keyboard-skin-design";
 import { GroupList } from "../../core/platform-controls";
 import { CandidateColorsSection } from "../candidate-colors-section";
 import { ThemeSettingsSection } from "../theme-settings-section";
@@ -157,6 +158,25 @@ export function SkinSettingsPage({ hidden = false }: { hidden?: boolean }) {
   // 从网格的 AI 图块打开的「AI 皮肤抽卡」是 WebView 返回栈上单独的一个视图，所以系统返回手势能关掉它。
   const { aiSkins, customSkinLibrary } = client;
   const [aiOpen, setAiOpen] = useState(false);
+  // 网格里列出皮肤库的设计（在「社区」获取的皮肤也存在这里）。每次回到网格都重读：从别的标签页回来，或从编辑器、AI 抽卡这两个子视图返回，刚获取或刚保存的皮肤就能出现。
+  const [savedDesigns, setSavedDesigns] = useState<SavedTouchKeyboardSkin[]>([]);
+  const gridVisible = phoneGrid && shown && !showTouchSkinEditor && !aiOpen;
+  useEffect(() => {
+    if (!gridVisible || !customSkinLibrary) return;
+    let current = true;
+    customSkinLibrary.load().then(
+      (items) => {
+        if (current) setSavedDesigns(items);
+      },
+      // 皮肤库读不出来时只是少了这几张卡片，内置主题照常显示，与 Android 皮肤页一致。
+      () => {
+        if (current) setSavedDesigns([]);
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [gridVisible, customSkinLibrary]);
   // 鸿蒙手机上「设计我的皮肤」同样是返回栈上的一个视图，不在这页里就地展开。从「我的 → 我的设计」进来时没有这一条记录，编辑器直接打开；返回离开这页时记录里没有它，编辑器随之关上，下次进来不会再自己打开。
   useMobilePopState(phoneGrid, (event) => {
     setAiOpen(event.state?.skinSubpage === "ai");
@@ -305,6 +325,10 @@ export function SkinSettingsPage({ hidden = false }: { hidden?: boolean }) {
                       onEdit: openEditor,
                     }
                   : undefined
+              }
+              savedDesigns={savedDesigns}
+              onSelectSavedDesign={
+                client.customTouchKeyboardSkins ? onCustomKeyboardChange : undefined
               }
               keyboardTheme={keyboardPreviewTheme}
               onApply={onPreferencesChange}

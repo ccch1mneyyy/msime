@@ -1,10 +1,14 @@
 import { useId } from "react";
 import type { Preferences } from "../index";
 import { ActionButton } from "../core/action-button";
+import { deepEqual } from "../core/deep-equal";
 import { FluentIcon } from "../core/fluent-icons";
 import * as controls from "../core/platform-controls-style";
 import { ScreenKeyboardPreview } from "../keyboard/screen-keyboard-preview";
-import type { TouchKeyboardSkinDesign } from "../keyboard/touch-keyboard-skin-design";
+import type {
+  SavedTouchKeyboardSkin,
+  TouchKeyboardSkinDesign,
+} from "../keyboard/touch-keyboard-skin-design";
 import type { ExternalSkin } from "../skin/external-skins";
 import {
   applyCandidateSkin,
@@ -37,6 +41,10 @@ export interface SkinGridProps {
   packages: ExternalSkin[];
   /** 在有键盘皮肤编辑器（`customTouchKeyboardSkins`）的宿主上提供；它的卡片取代目录里的自定义。 */
   customDesign?: SkinGridCustomDesign;
+  /** 本机皮肤库里的设计：在「社区」里获取的皮肤和命名保存的设计，排在我的皮肤之后，与 Android 皮肤页的「我的设计」一致。 */
+  savedDesigns?: SavedTouchKeyboardSkin[];
+  /** 选中皮肤库里的一个设计：把它设为自定义主题的键盘。 */
+  onSelectSavedDesign?: (design: TouchKeyboardSkinDesign) => void;
   /** 键盘绘制所用的浅色或深色模式，供跟随模式的皮肤使用。 */
   keyboardTheme: "dark" | "light";
   /** 把卡片的选择应用到偏好设置草稿，与主题轮播的切换做的更新相同。 */
@@ -107,6 +115,8 @@ function skinGridCards({
   customTheme,
   packages,
   customDesign,
+  savedDesigns = [],
+  onSelectSavedDesign,
   keyboardTheme,
   onApply,
 }: SkinGridProps): Card[] {
@@ -123,8 +133,17 @@ function skinGridCards({
     const skin = packages.find((entry) => entry.id === id);
     return skin ? skinSlot(skin.base) : undefined;
   };
-  const designInUse = !packageInUse && customDesign !== undefined && customDesign.selected;
   const storedDesign = customTheme?.keyboard ?? undefined;
+  // 正在使用的设计就是皮肤库里的某一款时，选中的是那张有名字的卡片，我的皮肤不再同时打勾。
+  const savedInUse =
+    globalTheme === "custom" && !packageInUse
+      ? savedDesigns.find((item) => deepEqual(item.design, storedDesign))
+      : undefined;
+  const designInUse =
+    !packageInUse &&
+    savedInUse === undefined &&
+    customDesign !== undefined &&
+    customDesign.selected;
   // 自定义主题在 `base` 之上绘制的键盘：有设计时用设计，否则用该 base 的键盘。
   const customKeyboard = (base: BaseGlobalTheme | undefined) => ({
     skin: keyboardThemeId("custom", { ...customTheme, base }),
@@ -183,6 +202,18 @@ function skinGridCards({
       deselect: customDesign.onEdit,
       opens: Boolean(customDesign.onEdit),
     });
+  if (onSelectSavedDesign)
+    for (const item of savedDesigns)
+      cards.push({
+        key: `saved:${item.id}`,
+        title: item.name,
+        selected: item === savedInUse,
+        theme: keyboardTheme,
+        skin: "custom",
+        design: item.design,
+        statisticsId: "custom",
+        select: () => onSelectSavedDesign(item.design),
+      });
   // 社区和本机的皮肤包是用户自己装的，两种明暗下都列出，不按 base 的明暗过滤；只有目录里的内置主题按明暗提供。
   for (const skin of packages) {
     cards.push({

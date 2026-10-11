@@ -485,3 +485,38 @@ test("desktop hosts and the HarmonyOS 2-in-1 keep the carousel", async () => {
   expect(within(page).getByRole("region", { name: "主题列表" })).toBeTruthy();
   expect(page.querySelector("[data-skin-grid]")).toBeNull();
 });
+
+// 皮肤库里的设计（在「社区」获取的皮肤也存在这里）排在我的皮肤之后，两种明暗下都列出；正在用的那款打勾，我的皮肤不再同时打勾。
+test("saved designs follow 我的皮肤, the one in use is checked, and tapping one applies it", () => {
+  const panda = { ...design, accent: 0x1f6b4a };
+  const fox = { ...design, background: 0x1b2340 };
+  const savedDesigns = [
+    { id: "panda", name: "竹林熊猫茶会", design: panda },
+    { id: "fox", name: "月光狐狸茶屋", design: fox },
+  ];
+  for (const keyboardTheme of ["light", "dark"] as const) {
+    const onSelectSavedDesign = vi.fn();
+    grid({
+      globalTheme: "custom",
+      customTheme: { base: "paper", keyboard: fox },
+      customDesign: { design: fox, selected: true, onSelect: vi.fn() },
+      savedDesigns,
+      onSelectSavedDesign,
+      keyboardTheme,
+    });
+    const names = cardNames();
+    expect(names.slice(names.indexOf("我的皮肤"), names.indexOf("我的皮肤") + 3)).toEqual([
+      "我的皮肤",
+      "竹林熊猫茶会",
+      "月光狐狸茶屋",
+    ]);
+    expect(screen.getByRole("button", { name: "月光狐狸茶屋" }).getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    for (const name of ["我的皮肤", "竹林熊猫茶会"])
+      expect(screen.getByRole("button", { name }).getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(screen.getByRole("button", { name: "竹林熊猫茶会" }));
+    expect(onSelectSavedDesign).toHaveBeenLastCalledWith(panda);
+    cleanup();
+  }
+});
