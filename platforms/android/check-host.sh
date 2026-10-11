@@ -53,8 +53,8 @@ if rg -n 'getLongPressTimeout' "$repo_root/platforms/android/java/app/msime/andr
   echo "The Japanese nine-key flick guide must show on touch-down, not after the long-press timeout" >&2
   exit 1
 fi
-# 只改大小写时不重建键行（#6997）：重建出的新键在下一次布局前宽高为 0，Shift 之后立刻按下的字母找不到键而被丢掉。Shift、一次性大写用掉和自动大写都经 refreshLetterCase 就地改键面；字母键的气泡读按下时的键面，不能用建键时记下的那个。
-if rg -U -n '(consumeLetter\(\)\)\s*\{?|letterCase\.toggle\(SystemClock\.uptimeMillis\(\)\);|applyAutomatic\(next\)\))\s*imeLetterRows\.rebuildKeyRows\(\)' \
+# 只改大小写时不重建键行（#6997）：重建出的新键在下一次布局前宽高为 0，Shift 之后立刻按下的字母找不到键而被丢掉。Shift、一次性大写用掉和自动大写都经 refreshLetterCase 就地改键面；字母键的气泡读按下时的键面，不能用建键时记下的那个。触发和重建之间允许夹着 `//` 注释行（Shift 处理里就有一行），不然改回 rebuildKeyRows 时这道检查认不出来。
+if rg -U -n '(consumeLetter\(\)\)\s*\{?|letterCase\.toggle\(SystemClock\.uptimeMillis\(\)\);|applyAutomatic\(next\)\))(\s*//[^\n]*)*\s*imeLetterRows\.rebuildKeyRows\(\)' \
     "$repo_root/platforms/android/java/app/msime/android/core/MSIMEInputService.java" \
   || rg -n 'showKeyPreview\(key, face\)' "$repo_root/platforms/android/java/app/msime/android/core/ImeLetterRows.java"; then
   echo "A letter-case change must relabel the keys in place (ImeLetterRows.refreshLetterCase), not rebuild the rows" >&2

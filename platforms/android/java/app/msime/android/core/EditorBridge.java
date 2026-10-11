@@ -49,19 +49,23 @@ public final class EditorBridge {
     }
 
     /**
-     * 不经引擎结束组字区，但组字区里画的不是确定时的文字（日语末尾单个 `n` 画成字母，确定时是ん）：先把组字区换成 {@code settled} 再结束，留在文档里的是确定的文字。用户移到的选区放回原处：在组字区之后的按两段文字的长度差平移，落在组字区里的不超出新文字。没有组字区位置（composingStart < 0）时不恢复选区，光标留在新文字末尾。
+     * 不经引擎结束组字区，但组字区里画的不是确定时的文字（日语末尾单个 `n` 画成字母，确定时是ん）：先把组字区换成 {@code settled} 再结束，留在文档里的是确定的文字。用户移到的选区放回原处：在组字区之后的按两段文字的长度差平移，落在组字区里的不超出新文字。
+     *
+     * <p>只替换编辑器报告还在的组字区（composingStart >= 0 且不为空）。编辑器报告没有组字区时（应用自己改了文字或去掉了组字区：发送后清空的聊天框、值被重置的 Compose/Flutter 输入框、自己确定了组字的编辑器），{@code setComposingText} 会在光标处插入新文字并替换选中的文字，所以这时和 {@link #abandon} 一样只结束组字，不写任何文字。
      */
     public void settle(Sink sink, String settled, int composingStart, int composingEnd,
             int selectionStart, int selectionEnd) {
+        if (composingStart < 0 || composingEnd <= composingStart) {
+            abandon(sink);
+            return;
+        }
         composing = false;
         sink.begin();
         try {
             sink.compose(settled);
             sink.finish();
-            if (composingStart >= 0 && composingEnd >= composingStart) {
-                sink.select(resettled(selectionStart, composingStart, composingEnd, settled.length()),
-                    resettled(selectionEnd, composingStart, composingEnd, settled.length()));
-            }
+            sink.select(resettled(selectionStart, composingStart, composingEnd, settled.length()),
+                resettled(selectionEnd, composingStart, composingEnd, settled.length()));
         } finally { sink.end(); }
     }
 

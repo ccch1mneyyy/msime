@@ -70,9 +70,20 @@ public final class EditorSmoke {
         bridge.settle(sink, "abcd", 4, 6, 5, 8);
         check(sink.calls.equals(List.of("begin", "compose:abcd", "finish", "select:5,10", "end")));
         sink.calls.clear();
-        // 会话停下时没有新选区，换完就结束，光标留在新文字末尾。
-        bridge.settle(sink, "かん", -1, -1, -1, -1);
-        check(sink.calls.equals(List.of("begin", "compose:かん", "finish", "end")));
+        // 编辑器报告已经没有组字区（发送后清空的聊天框、应用自己确定了组字）：setComposingText 会把「かん」插到光标处，所以不写任何文字，只结束组字。
+        check(bridge.apply(sink, null, "かn"));
+        sink.calls.clear();
+        bridge.settle(sink, "かん", -1, -1, 0, 0);
+        check(sink.calls.equals(List.of("finish")));
+        sink.calls.clear();
+        check(bridge.apply(sink, null, ""));
+        check(sink.calls.equals(List.of("begin", "end")));
+        sink.calls.clear();
+        // 空的组字区同样算没有。
+        check(bridge.apply(sink, null, "かn"));
+        sink.calls.clear();
+        bridge.settle(sink, "かん", 4, 4, 4, 4);
+        check(sink.calls.equals(List.of("finish")));
         sink.calls.clear();
         check(bridge.apply(sink, null, ""));
         check(sink.calls.equals(List.of("begin", "end")));

@@ -1690,7 +1690,8 @@ public final class MSIMEInputService extends InputMethodService {
         }
         // A Stroke composition still marked here (the session stopped without CommitRaw) is stroke glyphs, not text: remove it rather than finish it into the document.
         if (connection != null && strokeCompositionMarked()) bridge.discard(sink(typingSource()));
-        else if (connection != null) finishCompositionInPlace(-1, -1, -1, -1);
+        // 会话停下时不知道编辑器里是否还有组字区（restartInput 前应用常已清空或改写了文字），换成确定读音可能把它插进文档，所以只结束组字区，不写文字。
+        else if (connection != null) bridge.abandon(sink(typingSource()));
         view = null;
         closeCandidatePanel();
         // 换编辑器时不让任何工具栏面板（含常用语）活下来，理由同 finishInputViewPresentation。
@@ -2533,7 +2534,7 @@ public final class MSIMEInputService extends InputMethodService {
     }
 
     /**
-     * 不经引擎就结束输入框里的组字区（光标被移走、会话停下）时，组字区里的文字就留在文档里。日语末尾单个 `n` 画成字母，确定时却是ん，所以这时先换成确定的读音再结束，不把半截罗马字写进文档；用户点到的选区放回原处。画的和确定的相同时照旧原样结束。
+     * 光标被移走、不经引擎就结束输入框里的组字区时，组字区里的文字就留在文档里。日语末尾单个 `n` 画成字母，确定时却是ん，所以这时先换成确定的读音再结束，不把半截罗马字写进文档；用户点到的选区放回原处。画的和确定的相同时照旧原样结束。只有编辑器回报里还有组字区时才替换（{@link EditorBridge#settle}）：没有组字区时 `setComposingText` 会把读音插到光标处，这时只结束组字。
      */
     private void finishCompositionInPlace(int composingStart, int composingEnd,
             int selectionStart, int selectionEnd) {

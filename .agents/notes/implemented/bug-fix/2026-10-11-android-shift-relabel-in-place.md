@@ -21,7 +21,7 @@ Shift 状态一变，紧跟着按下的字母常常没有反应，稍等一下�
 - 字母键气泡在按下时读 `key.getText()`，不再用建键时记下的键面，否则就地改后气泡还显示旧的大小写。
 - 无障碍描述先写成不带提示的字母描述，与重建时一样；随后的 `render()` 里 `updateShuangpinKeyHints` 补上双拼提示后缀。
 
-`check-host.sh` 加了一道源码检查：Shift、`consumeLetter`、`applyAutomatic` 之后直接调 `rebuildKeyRows()`，或气泡用建键时的 `face`，都会失败。
+`check-host.sh` 加了一道源码检查：Shift、`consumeLetter`、`applyAutomatic` 之后直接调 `rebuildKeyRows()`（中间只隔着 `//` 注释行也算，Shift 处理里就隔着一行），或气泡用建键时的 `face`，都会失败。
 
 ## Alternatives considered
 
@@ -35,4 +35,4 @@ Shift、一次性大写用掉和自动大写不再销毁字母键，紧跟着的
 
 ## Verification
 
-`check-host.sh` 的新检查在改动前的源码上命中 7 处（Shift、`type()` 的 4 处、硬件键盘 1 处、自动大写 1 处）加气泡 1 处，改动后不命中；Android JVM 冒烟与设备套件编译通过。没有在设备或模拟器上复现「Shift 后立即按字母被丢」，也没有在设备上验证修复后的表现；iOS 和 HarmonyOS 是否在 Shift 时重建键行没有检查。
+`check-host.sh` 的新检查在改动前的源码上命中 7 处（Shift、`type()` 的 4 处、硬件键盘 1 处、自动大写 1 处）加气泡 1 处，改动后不命中；只把 Shift 处理里注释下面那行改回 `rebuildKeyRows()` 时也命中（最初的正则只容许空白，认不出这种回退）；Android JVM 冒烟与设备套件编译通过。没有在设备或模拟器上复现「Shift 后立即按字母被丢」，也没有在设备上验证修复后的表现；iOS 和 HarmonyOS 是否在 Shift 时重建键行没有检查。
