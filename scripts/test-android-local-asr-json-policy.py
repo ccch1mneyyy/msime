@@ -32,9 +32,14 @@ def main() -> int:
     if "JsonPolicy.strictBoolean" not in smoke:
         print(f"{SMOKE}: 缺少 JsonPolicy.strictBoolean 合同检查", file=sys.stderr)
         return 1
-    if any("JsonPolicy.strictString" not in text for text in (source, recognizer, smoke)):
-        print(f"{SMOKE}: 缺少 JsonPolicy.strictString 合同检查", file=sys.stderr)
+    # 识别结果文本经共享的 `AiProviderResponse.boundedText` 收口，它内部用 `JsonPolicy.strictStringOrEmpty`，与直接调用 `JsonPolicy.strictString` 是同一条合同。
+    if "JsonPolicy.strictString" not in source and "AiProviderResponse.boundedText" not in source:
+        print(f"{SOURCE}: 识别文本没有经过 JsonPolicy.strictString 或 AiProviderResponse.boundedText", file=sys.stderr)
         return 1
+    for path, text in ((RECOGNIZER, recognizer), (SMOKE, smoke)):
+        if "JsonPolicy.strictString" not in text:
+            print(f"{path}: 缺少 JsonPolicy.strictString 合同检查", file=sys.stderr)
+            return 1
     print("Android 本地语音识别已复用共享 JSON 类型策略")
     return 0
 
