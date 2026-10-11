@@ -121,6 +121,7 @@ msime-linux-setup --update --download   # 升级之后只取回过期的那几�
 
 - 没有 NVIDIA 却打不开、空白或报 Error 71：两个变量都设成 `1`。
 - 有 NVIDIA 但想试 GPU 绘制，或 NVIDIA 下窗口闪烁：两个变量都设成 `0`。只设其中一个不够：任一变量为 `1` 都会让 WebKit 退回 CPU 绘制。
+- 想在 NVIDIA 上保留合成与 DMA-BUF 渲染器，只把缓冲改走共享内存：在前一条的基础上再加 `WEBKIT_DMABUF_RENDERER_FORCE_SHM=1`。NVIDIA 专有驱动（open 内核模块 615.71.09）加 Hyprland 0.56.2、webkit2gtk-4.1 2.54.1 上实测这样能避开 Error 71（#5834），但还没有量过它是否真的走了 GPU 合成路径；要长期用它，先确认这一点。
 
 终端里临时试一次：先确认旧的设置进程已经完全退出（`pgrep -af msime-linux-desktop` 没有输出；设置外壳是单实例的，关掉窗口后进程还会留十分钟，再次打开会复用它和它启动时的环境），再运行
 

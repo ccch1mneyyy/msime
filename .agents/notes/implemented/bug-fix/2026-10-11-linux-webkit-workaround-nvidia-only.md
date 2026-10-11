@@ -40,7 +40,7 @@ issue #6847：Arch Linux、niri 26.04 Wayland 会话、Mesa 26.2、webkit2gtk-4.
 ## Alternatives considered
 
 - 维持对所有机器无条件默认（#3273 和 #5834 当时的选择）。理由最强的一条：故障取决于驱动、GTK/WebKit、合成器和实际渲染路径的组合，按厂商判断不一定准，无条件默认最省事，也不会漏掉没见过的组合；设置页是静态表单，CPU 绘制的开销当时看感觉不到。没采用：这个代价已经不是感觉不到的了，非合成路径在 niri 上闪烁（#6847）、在 deepin 上滚动不跟手（#6403），两次报告都来自没有 NVIDIA 的机器；而规避所针对的两次故障都只在 NVIDIA 专有驱动上出现过。没被判断覆盖到的组合仍可由用户显式设变量，README 写了做法。
-- 用 `WEBKIT_DMABUF_RENDERER_FORCE_SHM=1` 代替两个禁用变量，保留合成、只把缓冲改走共享内存。理由：可能一个设置同时保住 NVIDIA 能启动和其他机器上的合成与滚动。没采用：#5834 的崩溃发生在哪一步没有定位到，这个替换能否规避它只能在出问题的 NVIDIA 机器上验证；它在 niri 上是否也闪烁同样不知道。等有 NVIDIA 用户能复测时可以再评估，届时只需改启动器的 NVIDIA 分支。
+- 用 `WEBKIT_DMABUF_RENDERER_FORCE_SHM=1` 代替两个禁用变量，保留合成、只把缓冲改走共享内存。理由：可能一个设置同时保住 NVIDIA 能启动和其他机器上的合成与滚动。没采用：#5834 的崩溃发生在哪一步没有定位到，这个替换能否规避它只能在出问题的 NVIDIA 机器上验证；它在 niri 上是否也闪烁同样不知道。等有 NVIDIA 用户能复测时可以再评估，届时只需改启动器的 NVIDIA 分支。2026-10-11 有 NVIDIA 专有驱动（open 内核模块 615.71.09）加 Hyprland 0.56.2 的机器复测：两个禁用变量都设成 `0` 再加 `WEBKIT_DMABUF_RENDERER_FORCE_SHM=1` 时窗口起得来，只设两个 `0` 时同一台机器约 0.3 秒退出（见 Verification）。它是否真的走 GPU 合成仍未量过，评估时先确认这一点。
 - 按合成器判断，例如在 niri 下不导出。理由：改动范围最小，只影响报告者的环境。没采用：合成器白名单或黑名单要随每个新合成器补一条，而问题出在规避本身对非 NVIDIA 机器没有必要，不在 niri。
 - 加一个水杉自己的环境变量或配置项开关这条规避。理由：给用户一个不依赖 WebKit 变量名的开关。没采用：两个 WebKit 变量本身就是显式开关，启动器原样尊重它们；再加一层只会让「最终值由哪里决定」更难查。
 
@@ -56,3 +56,4 @@ issue #6847：Arch Linux、niri 26.04 Wayland 会话、Mesa 26.2、webkit2gtk-4.
 - `python3 platforms/linux/tests/core/settings_launcher_contract.py` 在 macOS 和 Linux 构建镜像（Debian bookworm，`/bin/sh` 是 dash）里都通过。把非 NVIDIA 分支里去掉空值的那两行换成空操作，测试在空值用例上失败（`WEBKIT_DISABLE_COMPOSITING_MODE` 为空串而不是未设置）；把探测结果固定为未加载，测试在 NVIDIA 用例上失败。
 - `sh -n platforms/linux/data/msime-linux-settings.in`：通过。
 - 没有在 niri 上验证闪烁消失，也没有在 NVIDIA 加 KWin 或 Hyprland 的机器上验证 Error 71 没有回来；手上没有这两种环境，需要 #6847、#3273 和 #5834 的报告者复测。
+- 2026-10-11 在 NVIDIA 专有驱动（open 内核模块 615.71.09）加 Hyprland 0.56.2、webkit2gtk-4.1 2.54.1 的混合显卡笔记本（AMD 核显加 RTX 4070 Max-Q）上补上了 Hyprland 侧的复测，三组对照都在 develop 的 `platforms/linux/data/msime-linux-settings.in` 生成的启动器下运行（0.11.0 的启动器还没有 #5877），每次运行前等旧的设置进程退出：NVIDIA 分支默认时 `/proc/<pid>/environ` 里两个变量都是 `1`，进程存活、窗口 `mapped`、日志里没有 `Error 71`；显式设成两个 `0` 时约 0.3 秒后以 `Error 71 (协议错误) dispatching to Wayland display` 退出；两个 `0` 再加 `WEBKIT_DMABUF_RENDERER_FORCE_SHM=1` 时存活、窗口 `mapped`。KWin 侧仍没有环境。
