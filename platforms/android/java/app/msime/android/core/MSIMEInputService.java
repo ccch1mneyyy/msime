@@ -3316,7 +3316,7 @@ public final class MSIMEInputService extends InputMethodService {
             if (TextPolicy.isAsciiLetter(output)) {
                 commitEnglishLiteral(output);
                 if (letterCase.consumeLetter()) {
-                    imeLetterRows.rebuildKeyRows();
+                    imeLetterRows.refreshLetterCase();
                     render();
                 }
                 return;
@@ -3331,7 +3331,7 @@ public final class MSIMEInputService extends InputMethodService {
             char input = KoreanKeyboardLayout.input(key, letterCase.usesUppercase());
             if (!character(input, TextPolicy.isUpperCase(input))) commitText(String.valueOf(input));
             if (letterCase.consumeLetter()) {
-                imeLetterRows.rebuildKeyRows();
+                imeLetterRows.refreshLetterCase();
                 render();
             }
             return;
@@ -3339,7 +3339,7 @@ public final class MSIMEInputService extends InputMethodService {
         if (entersHelpcode() && TextPolicy.isAsciiLetter(key)) {
             character(Character.toUpperCase(key), true);
             if (letterCase.consumeLetter()) {
-                imeLetterRows.rebuildKeyRows();
+                imeLetterRows.refreshLetterCase();
                 render();
             }
             return;
@@ -3359,7 +3359,7 @@ public final class MSIMEInputService extends InputMethodService {
             commitText(fullWidthOutput(String.valueOf(output)));
         }
         if (letterCase.consumeLetter()) {
-            imeLetterRows.rebuildKeyRows();
+            imeLetterRows.refreshLetterCase();
             render();
         }
     }
@@ -3828,7 +3828,7 @@ public final class MSIMEInputService extends InputMethodService {
         boolean next = EnglishCapitalizationPolicy.shouldShift(
             EditorPolicy.capitalizationMode(editorInputType), context);
         // 手动按下的单次大写留到下一个字母用掉为止，与 HarmonyOS 一致；否则按下 Shift 后编辑器回报一次光标位置就会把它冲掉。
-        if (!letterCase.isPressedShift() && letterCase.applyAutomatic(next)) imeLetterRows.rebuildKeyRows();
+        if (!letterCase.isPressedShift() && letterCase.applyAutomatic(next)) imeLetterRows.refreshLetterCase();
         render();
     }
 
@@ -3888,8 +3888,9 @@ public final class MSIMEInputService extends InputMethodService {
             view = nextView;
             keyboardLayer = KeyboardLayout.Layer.LETTERS;
             letterCase.reset();
+            // 布局或数字键面变了时 refreshLetterCase 自己会整组重建；只是大写回到小写时就地改键面。
             if (previousLayout != displayedTouchLayout(view) || previousUppercase || previousDigitFace)
-                imeLetterRows.rebuildKeyRows();
+                imeLetterRows.refreshLetterCase();
             updateAutomaticCapitalization();
             if (directEnglishActive()) refreshEnglishSuggestions();
             else { clearEnglishSuggestions(); render(); }
@@ -4086,7 +4087,7 @@ public final class MSIMEInputService extends InputMethodService {
                     char output = letterCase.usesUppercase() || event.isShiftPressed()
                         ? Character.toUpperCase((char) unicode) : Character.toLowerCase((char) unicode);
                     commitEnglishLiteral(output);
-                    if (letterCase.consumeLetter()) imeLetterRows.rebuildKeyRows();
+                    if (letterCase.consumeLetter()) imeLetterRows.refreshLetterCase();
                 } else {
                     commitEnglishLiteral(unicode);
                 }
@@ -7223,7 +7224,8 @@ public final class MSIMEInputService extends InputMethodService {
                 letterCase.reset();
             }
             letterCase.toggle(SystemClock.uptimeMillis());
-            imeLetterRows.rebuildKeyRows();
+            // 只换键面不重建键行（#6997）：重建后的新键在下一次布局前宽高为 0，紧跟着 Shift 按下的字母会被丢掉。
+            imeLetterRows.refreshLetterCase();
             render();
         });
         shiftButton.setContentDescription("切换到英文大写");
